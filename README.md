@@ -10,6 +10,26 @@ Outil cartographique de pré-étude de raccordement d'un projet photovoltaïque 
 
 Le bouton « Copier le tableau » met les résultats dans le presse-papiers au format tableur.
 
+## Partager une analyse
+
+L'adresse de la page enregistre le site et tous les réglages ; copier l'URL suffit pour retrouver la même analyse.
+
+```
+…/raccord-pv/#45.61000,5.15000&p=15&n=3&min=1&r=30&cap=1&rte=0&y=1&ml=200&dep=12&cell=150&pdl=90&k=1.3
+```
+
+| Clé | Réglage | Clé | Réglage |
+|---|---|---|---|
+| `lat,lon` | position du site (facultative) | `ml` | liaison HTA souterraine (€/m) |
+| `p` | puissance d'injection (MW) | `dep` | puissance max par départ HTA (MW) |
+| `n` | postes affichés (3 à 5) | `cell` | cellule départ au poste source (k€) |
+| `min` | capacité restante minimum (MW) | `pdl` | poste de livraison (k€) |
+| `r` | rayon de recherche des projets (km) | `k` | coefficient de détour sans itinéraire |
+| `cap` | uniquement postes avec capacité (1/0) | `rte` | inclure les postes RTE sans GRD (1/0) |
+| `y` | projets de moins de 5 ans (1/0) | | |
+
+Une valeur absente ou invalide reprend la valeur par défaut. Si le lien contient des hypothèses de coût différentes des valeurs par défaut, le bloc « Hypothèses de coût » s'ouvre à l'arrivée sur la page.
+
 ## Sources de données
 
 | Donnée | Source | Mise à jour |

@@ -89,6 +89,48 @@
       <div class="pm">Capareseau, mise à jour ${esc(p.up || "—")}</div>`;
   }
 
+  /* ---------- état dans l'URL ----------
+   * #45.61000,5.15000&p=10&n=5&min=0&r=20&cap=1&rte=0&y=1&ml=160&dep=12&cell=120&pdl=90&k=1.3
+   * Le site est facultatif ; les anciens liens « #lat,lon » restent valides. */
+  const URL_FIELDS = [
+    ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
+    ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"],
+    ["ml", "#cMl"], ["dep", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"],
+  ];
+  const COST_KEYS = ["ml", "dep", "cell", "pdl", "k"];
+  const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
+  function writeHash() {
+    const parts = [];
+    if (state.site) parts.push(`${state.site.lat.toFixed(5)},${state.site.lon.toFixed(5)}`);
+    for (const [k, s] of URL_FIELDS) {
+      const el = $(s);
+      const v = el.type === "checkbox" ? (el.checked ? "1" : "0") : String(el.value).trim().replace(",", ".");
+      if (v !== "") parts.push(`${k}=${encodeURIComponent(v)}`);
+    }
+    try { history.replaceState(null, "", "#" + parts.join("&")); } catch (_) {}
+  }
+  function readHash() {
+    let site = null, costChanged = false;
+    for (const tok of location.hash.slice(1).split("&")) {
+      if (!tok) continue;
+      const eq = tok.indexOf("=");
+      if (eq < 0) {
+        const c = tok.split(",").map(Number);
+        if (c.length === 2 && c.every(Number.isFinite) && Math.abs(c[0]) <= 90 && Math.abs(c[1]) <= 180) site = { lat: c[0], lon: c[1] };
+        continue;
+      }
+      const k = tok.slice(0, eq), raw = decodeURIComponent(tok.slice(eq + 1));
+      const f = URL_FIELDS.find(([key]) => key === k); if (!f) continue;
+      const el = $(f[1]);
+      if (el.type === "checkbox") el.checked = raw === "1" || raw === "true";
+      else if (el.tagName === "SELECT") { if ([...el.options].some((o) => o.value === raw)) el.value = raw; }
+      else if (Number.isFinite(num(raw))) el.value = num(raw);
+      if (COST_KEYS.includes(k) && String(num(raw)) !== String(num(DEFAULTS[k]))) costChanged = true;
+    }
+    if (costChanged) $(".hyp").open = true; // montre que des hypothèses non standard sont appliquées
+    return site;
+  }
+
   /* ---------- placement du site ---------- */
   map.on("click", (e) => setSite(e.latlng.lat, e.latlng.lng, true));
   function setSite(lat, lon, fromClick = false) {
@@ -98,7 +140,7 @@
         .addTo(map).bindTooltip("Site envisagé (déplaçable)");
       siteMarker.on("dragend", () => { const ll = siteMarker.getLatLng(); setSite(ll.lat, ll.lng, true); });
     } else siteMarker.setLatLng([lat, lon]);
-    try { history.replaceState(null, "", `#${lat.toFixed(5)},${lon.toFixed(5)}`); } catch (_) {}
+    writeHash();
     analyse(!fromClick);
   }
 
@@ -389,9 +431,9 @@
   });
 
   /* ---------- paramètres & export ---------- */
-  ["#p", "#n", "#minCap", "#withCap", "#withRte"].forEach((s) => $(s).addEventListener("change", () => { if (s === "#p") drawAllPostes(); analyse(false); }));
-  ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => state.site && loadProjects()));
-  ["#cMl", "#pDep", "#cCell", "#cPdl", "#kDet"].forEach((s) => $(s).addEventListener("input", () => { if (state.results.length) { renderList(nearest(state.site, params().p).firstFull); document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel)); } }));
+  ["#p", "#n", "#minCap", "#withCap", "#withRte"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (s === "#p") drawAllPostes(); analyse(false); }));
+  ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
+  ["#cMl", "#pDep", "#cCell", "#cPdl", "#kDet"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) { renderList(nearest(state.site, params().p).firstFull); document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel)); } }));
   $("#copy").addEventListener("click", async () => {
     const pr = params();
     const head = ["Rang", "Poste", "Code", "GRD", "Reste à affecter S3REnR (MW)", "Capacité réservée (MW)", "Remplissage", "Vol d'oiseau (km)", "Trajet piéton (km)", "Quote-part (k€/MW)", "Quote-part (k€)", "Liaison HTA (k€)", "Cellules (k€)", "Raccordement (k€)", "Avec poste de livraison (k€)", "Màj Capareseau"];
@@ -421,8 +463,15 @@
     const regs = m ? Object.values(m.regions).map((r) => r.maj_max).filter(Boolean).sort() : [];
     $("#meta").innerHTML = `<p>${m ? m.nb_postes.toLocaleString("fr-FR") : state.postes.length} postes · extraction Capareseau du ${m ? new Date(m.extraction).toLocaleDateString("fr-FR") : "—"}${regs.length ? ` (données régionales mises à jour entre le ${new Date(regs[0]).toLocaleDateString("fr-FR")} et le ${new Date(regs[regs.length - 1]).toLocaleDateString("fr-FR")})` : ""}. Corse et outre-mer non couverts par les S3REnR.</p>
       <p>Sources : <a href="https://www.capareseau.fr/" target="_blank" rel="noopener">Capareseau</a> (RTE, GRD), <a href="https://www.projets-environnement.gouv.fr/" target="_blank" rel="noopener">projets-environnement.gouv.fr</a>, itinéraires <a href="https://geoservices.ign.fr/" target="_blank" rel="noopener">IGN Géoplateforme</a> (secours OSRM/OSM). Les capacités évoluent en continu : seule une demande de raccordement (PTF) engage le gestionnaire de réseau.</p>`;
-    const h = location.hash.slice(1).split(",").map(Number);
-    if (h.length === 2 && h.every(Number.isFinite)) { map.setView([h[0], h[1]], 11); setSite(h[0], h[1]); }
+    const site = readHash();
+    drawAllPostes(); // couleurs selon la puissance lue dans l'URL
+    if (site) { map.setView([site.lat, site.lon], 11); setSite(site.lat, site.lon); } else if (location.hash) writeHash();
   }
+  // lien collé dans le même onglet : on réapplique tout
+  window.addEventListener("hashchange", () => {
+    const site = readHash();
+    drawAllPostes();
+    if (site) { map.setView([site.lat, site.lon], 11); setSite(site.lat, site.lon); } else analyse(false);
+  });
   boot();
 })();
