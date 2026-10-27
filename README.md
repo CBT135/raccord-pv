@@ -6,27 +6,41 @@ Outil cartographique de pré-étude de raccordement d'un projet photovoltaïque 
 2. L'outil affiche les 3 à 5 postes sources les plus proches à vol d'oiseau avec, pour chacun, la **capacité d'accueil réservée au titre du S3REnR qui reste à affecter** (Capareseau, champ `INFO_NA`).
 3. Il calcule le **trajet piéton** site → poste (IGN Géoplateforme, BD TOPO ; secours OSRM/OSM) et un lien Google Maps pour vérifier.
 4. Il chiffre un **coût de raccordement indicatif** : quote-part S3REnR du poste + liaison HTA souterraine sur la longueur du trajet + cellule(s) départ au poste source (+ poste de livraison). Les ratios sont modifiables dans « Hypothèses de coût ».
+   Valeurs par défaut : liaison HTA 140 €/m jusqu'à 10 MW d'injection et 180 €/m au-delà, cellule départ 90 k€, poste de livraison 180 k€, 12 MW par départ HTA.
 5. Il positionne les **projets PV publiés** sur projets-environnement.gouv.fr (études d'impact, avis de l'autorité environnementale, enquêtes et consultations, permis de construire) dans un rayon réglable, ainsi que les projets saisis à la main.
 
 Le bouton « Copier le tableau » met les résultats dans le presse-papiers au format tableur.
+
+## Corriger la position d'un poste
+
+Les coordonnées publiées par Capareseau sont approximatives. Les postes numérotés se déplacent à la souris (fond « Photographies aériennes » conseillé) ; la distance, le trajet piéton et le coût sont recalculés, et la liste est reclassée par distance. « Rétablir la position Capareseau » annule la correction.
+
+Les positions corrigées sont conservées à trois niveaux :
+
+1. **Dans le navigateur** : automatiquement, d'une session à l'autre.
+2. **Dans le lien** : les corrections des postes affichés sont incluses dans l'URL (paramètre `mv`), un lien partagé donne donc les mêmes distances.
+3. **Dans le dépôt**, pour tous vos appareils : bouton « Copier les positions corrigées », puis coller le contenu dans `data/postes-corrections.json` (modifiable directement sur GitHub). Ce fichier n'est pas touché par la mise à jour mensuelle Capareseau.
+
+Format du fichier : `{ "84:SSQUE": { "lat": 45.64308, "lon": 5.13182, "n": "ST-QUENTIN-FALLAVIER" } }` (clé = code région : code poste).
 
 ## Partager une analyse
 
 L'adresse de la page enregistre le site et tous les réglages ; copier l'URL suffit pour retrouver la même analyse.
 
 ```
-…/raccord-pv/#45.61000,5.15000&p=15&n=3&min=1&r=30&cap=1&rte=0&y=1&ml=200&dep=12&cell=150&pdl=90&k=1.3
+…/raccord-pv/#45.61000,5.15000&p=15&n=3&min=1&r=30&cap=1&rte=0&y=1&ml=140&ml2=180&seuil=10&dep=12&cell=90&pdl=180&k=1.3&mv=84:SSQUE:45.64308:5.13182
 ```
 
 | Clé | Réglage | Clé | Réglage |
 |---|---|---|---|
-| `lat,lon` | position du site (facultative) | `ml` | liaison HTA souterraine (€/m) |
+| `lat,lon` | position du site (facultative) | `ml` | liaison HTA jusqu'au seuil (€/m) |
+| `seuil` | seuil de puissance d'injection (MW) | `ml2` | liaison HTA au-delà du seuil (€/m) |
 | `p` | puissance d'injection (MW) | `dep` | puissance max par départ HTA (MW) |
 | `n` | postes affichés (3 à 5) | `cell` | cellule départ au poste source (k€) |
 | `min` | capacité restante minimum (MW) | `pdl` | poste de livraison (k€) |
 | `r` | rayon de recherche des projets (km) | `k` | coefficient de détour sans itinéraire |
 | `cap` | uniquement postes avec capacité (1/0) | `rte` | inclure les postes RTE sans GRD (1/0) |
-| `y` | projets de moins de 5 ans (1/0) | | |
+| `y` | projets de moins de 5 ans (1/0) | `mv` | positions corrigées des postes affichés |
 
 Une valeur absente ou invalide reprend la valeur par défaut. Si le lien contient des hypothèses de coût différentes des valeurs par défaut, le bloc « Hypothèses de coût » s'ouvre à l'arrivée sur la page.
 

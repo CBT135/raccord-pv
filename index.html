@@ -45,24 +45,30 @@
       <details class="hyp">
         <summary>Hypothèses de coût</summary>
         <div class="grid2">
-          <label>Liaison HTA souterraine <span class="unit">€/m</span><input id="cMl" type="number" step="10" value="160"></label>
+          <label>Liaison HTA jusqu'au seuil <span class="unit">€/m</span><input id="cMl" type="number" step="10" value="140"></label>
+          <label>Liaison HTA au-delà du seuil <span class="unit">€/m</span><input id="cMl2" type="number" step="10" value="180"></label>
+          <label>Seuil de puissance d'injection <span class="unit">MW</span><input id="pSeuil" type="number" step="0.5" value="10"></label>
           <label>Puissance max par départ <span class="unit">MW</span><input id="pDep" type="number" step="0.5" value="12"></label>
-          <label>Cellule départ au poste source <span class="unit">k€</span><input id="cCell" type="number" step="5" value="120"></label>
-          <label>Poste de livraison <span class="unit">k€</span><input id="cPdl" type="number" step="5" value="90"></label>
+          <label>Cellule départ au poste source <span class="unit">k€</span><input id="cCell" type="number" step="5" value="90"></label>
+          <label>Poste de livraison <span class="unit">k€</span><input id="cPdl" type="number" step="5" value="180"></label>
           <label>Détour si itinéraire indisponible <span class="unit">×</span><input id="kDet" type="number" step="0.05" value="1.3"></label>
         </div>
-        <p class="note">Ordres de grandeur pour une pré-étude, à remplacer par vos propres ratios. La quote-part S3REnR est celle publiée par Capareseau pour chaque poste.</p>
+        <p class="note">Le prix au mètre de la liaison HTA dépend de la puissance d'injection : prix « jusqu'au seuil » si elle est inférieure ou égale au seuil, prix « au-delà » sinon. La quote-part S3REnR est celle publiée par Capareseau pour chaque poste.</p>
       </details>
     </section>
 
     <section class="block" id="results">
       <div class="head">
         <h2>Postes sources</h2>
-        <button type="button" id="copy" class="ghost" hidden>Copier le tableau</button>
+        <div class="actions">
+          <button type="button" id="copyCorr" class="ghost" hidden>Copier les positions corrigées</button>
+          <button type="button" id="copy" class="ghost" hidden>Copier le tableau</button>
+        </div>
       </div>
       <div id="site" class="site"></div>
       <ol id="list" class="list"></ol>
       <p id="hint" class="hint">Cliquez sur la carte pour placer le site envisagé. Le marqueur peut ensuite être déplacé.</p>
+      <p id="dragHint" class="hint" hidden>Les postes numérotés se déplacent à la souris pour corriger leur position (vue « Photographies aériennes » dans le sélecteur de fonds) ; le trajet et le coût sont alors recalculés.</p>
     </section>
 
     <section class="block" id="projects">

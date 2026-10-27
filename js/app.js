@@ -11,7 +11,9 @@
   const GEOCODE = "https://data.geopf.fr/geocodage/search";
   const PV_RE = /photovolta|solaire|agrivolta|\bPV\b|ombri[eè]re/i;
 
-  const state = { postes: [], meta: null, site: null, results: [], sel: 0, localProj: [], importedProj: [], projects: [], routeSeq: 0 };
+  const state = { postes: [], meta: null, site: null, results: [], sel: 0, localProj: [], importedProj: [], projects: [], routeSeq: 0,
+    corr: {}, corrRepo: {}, lastDrag: 0 };
+  const LS_CORR = "raccordpv.positions"; // positions corrigées dans ce navigateur
 
   /* ---------- utilitaires ---------- */
   const num = (v) => { if (v === undefined || v === null || v === "") return null; const n = parseFloat(String(v).replace(",", ".").replace(/[^\d.\-]/g, "")); return Number.isFinite(n) ? n : null; };
@@ -30,13 +32,60 @@
     p: Math.max(0.1, num($("#p").value) || 10), n: parseInt($("#n").value, 10) || 5,
     minCap: Math.max(0, num($("#minCap").value) || 0), radius: Math.min(80, Math.max(2, num($("#radius").value) || 20)),
     withCap: $("#withCap").checked, withRte: $("#withRte").checked, projYears: $("#projYears").checked,
-    cMl: num($("#cMl").value) ?? 160, pDep: Math.max(1, num($("#pDep").value) || 12), cCell: (num($("#cCell").value) ?? 120) * 1e3,
-    cPdl: (num($("#cPdl").value) ?? 90) * 1e3, kDet: num($("#kDet").value) || 1.3,
+    cMl: num($("#cMl").value) ?? 140, cMl2: num($("#cMl2").value) ?? 180, pSeuil: num($("#pSeuil").value) ?? 10,
+    pDep: Math.max(1, num($("#pDep").value) || 12), cCell: (num($("#cCell").value) ?? 90) * 1e3,
+    cPdl: (num($("#cPdl").value) ?? 180) * 1e3, kDet: num($("#kDet").value) || 1.3,
   });
   const capOf = (p) => num(p.v.INFO_NA);
   function capClass(cap, P) { if (cap === null || cap <= 0) return "none"; return cap >= P ? "ok" : "part"; }
   const capColor = (cls) => css(cls === "ok" ? "--ok" : cls === "part" ? "--part" : "--none");
   const isGrd = (p) => !!(p.g1 || p.g2);
+
+  /* ---------- positions corrigées des postes ----------
+   * Ordre de priorité : data/postes-corrections.json (dépôt) < ce navigateur < lien (paramètre mv). */
+  const keyOf = (p) => `${p.r}:${p.c}`;
+  function loadLocalCorr() {
+    try { const o = JSON.parse(localStorage.getItem(LS_CORR) || "{}"); return o && typeof o === "object" ? o : {}; } catch (_) { return {}; }
+  }
+  function saveLocalCorr() {
+    // on ne garde dans le navigateur que ce qui diffère du fichier du dépôt
+    const own = {};
+    for (const [k, v] of Object.entries(state.corr)) { const r = state.corrRepo[k]; if (!r || r.lat !== v.lat || r.lon !== v.lon) own[k] = v; }
+    for (const k of Object.keys(state.corrRepo)) if (!state.corr[k]) own[k] = null; // retour à la position Capareseau
+    try { localStorage.setItem(LS_CORR, JSON.stringify(own)); } catch (_) {}
+  }
+  function mergeCorr(src) {
+    for (const [k, v] of Object.entries(src || {})) {
+      if (v === null) delete state.corr[k];
+      else if (v && Number.isFinite(+v.lat) && Number.isFinite(+v.lon)) state.corr[k] = { lat: +(+v.lat).toFixed(6), lon: +(+v.lon).toFixed(6), n: v.n };
+    }
+  }
+  function applyCorrections() {
+    for (const p of state.postes) {
+      if (p.lat0 === undefined) { p.lat0 = p.lat; p.lon0 = p.lon; }
+      const c = state.corr[keyOf(p)];
+      p.lat = c ? c.lat : p.lat0; p.lon = c ? c.lon : p.lon0; p.moved = !!c;
+    }
+    const nLocal = Object.keys(state.corr).filter((k) => { const r = state.corrRepo[k], v = state.corr[k]; return !r || r.lat !== v.lat || r.lon !== v.lon; }).length
+      + Object.keys(state.corrRepo).filter((k) => !state.corr[k]).length;
+    const b = $("#copyCorr");
+    b.hidden = !nLocal;
+    b.textContent = `Copier les positions corrigées (${nLocal} à enregistrer)`;
+  }
+  function setPosteLatLng(p, latlng) {
+    if (latlng) state.corr[keyOf(p)] = { lat: +latlng.lat.toFixed(6), lon: +latlng.lng.toFixed(6), n: p.n };
+    else delete state.corr[keyOf(p)];
+    saveLocalCorr();
+    applyCorrections();
+    drawAllPostes();
+    for (const r of state.results) if (r.p === p) { r.d = haversine(state.site, p); r.route = null; r.routeGeom = null; r.routeSrc = null; routeOne(r); }
+    // reclassement par distance (même ordre qu'à l'ouverture d'un lien partagé), le poste déplacé reste sélectionné
+    state.results.sort((a, b) => a.d - b.d);
+    const i = state.results.findIndex((r) => r.p === p);
+    if (i >= 0) state.sel = i;
+    writeHash();
+    refreshResults();
+  }
 
   /* ---------- carte ---------- */
   const ign = (layer, fmtImg = "image/png", style = "normal") =>
@@ -86,7 +135,7 @@
       <div>Capacité réservée : ${fmt(num(v.INFO_CR))} MW · remplissage ${esc(v.INFO_TX || "—")}</div>
       <div>File d'attente S3REnR : ${fmt(num(v.INFO_FAS3R))} MW · en service : ${fmt(num(v.INFO_ESS3R))} MW</div>
       <div>Quote-part : ${esc(v.INFO_QP || "—")}</div>
-      <div class="pm">Capareseau, mise à jour ${esc(p.up || "—")}</div>`;
+      <div class="pm">Capareseau, mise à jour ${esc(p.up || "—")}${p.moved ? " · position corrigée à la main" : ""}</div>`;
   }
 
   /* ---------- état dans l'URL ----------
@@ -95,9 +144,9 @@
   const URL_FIELDS = [
     ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
     ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"],
-    ["ml", "#cMl"], ["dep", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"],
+    ["ml", "#cMl"], ["ml2", "#cMl2"], ["seuil", "#pSeuil"], ["dep", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"],
   ];
-  const COST_KEYS = ["ml", "dep", "cell", "pdl", "k"];
+  const COST_KEYS = ["ml", "ml2", "seuil", "dep", "cell", "pdl", "k"];
   const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
   function writeHash() {
     const parts = [];
@@ -107,6 +156,10 @@
       const v = el.type === "checkbox" ? (el.checked ? "1" : "0") : String(el.value).trim().replace(",", ".");
       if (v !== "") parts.push(`${k}=${encodeURIComponent(v)}`);
     }
+    // positions corrigées des postes affichés, pour qu'un lien partagé donne les mêmes distances
+    const shown = new Set(state.results.map((r) => keyOf(r.p)));
+    const mv = Object.entries(state.corr).filter(([k]) => shown.has(k)).map(([k, v]) => `${k}:${v.lat}:${v.lon}`);
+    if (mv.length) parts.push("mv=" + encodeURIComponent(mv.join(";")));
     try { history.replaceState(null, "", "#" + parts.join("&")); } catch (_) {}
   }
   function readHash() {
@@ -119,7 +172,18 @@
         if (c.length === 2 && c.every(Number.isFinite) && Math.abs(c[0]) <= 90 && Math.abs(c[1]) <= 180) site = { lat: c[0], lon: c[1] };
         continue;
       }
-      const k = tok.slice(0, eq), raw = decodeURIComponent(tok.slice(eq + 1));
+      const k = tok.slice(0, eq);
+      let raw; try { raw = decodeURIComponent(tok.slice(eq + 1)); } catch (_) { continue; }
+      if (k === "mv") {
+        const o = {};
+        for (const item of raw.split(";")) {
+          const a = item.split(":"); if (a.length < 4) continue;
+          const lon = num(a.pop()), lat = num(a.pop());
+          if (Number.isFinite(lat) && Number.isFinite(lon)) o[a.join(":")] = { lat, lon };
+        }
+        mergeCorr(o);
+        continue;
+      }
       const f = URL_FIELDS.find(([key]) => key === k); if (!f) continue;
       const el = $(f[1]);
       if (el.type === "checkbox") el.checked = raw === "1" || raw === "true";
@@ -164,6 +228,7 @@
     $("#hint").hidden = true;
     renderList(firstFull);
     drawPostes();
+    writeHash(); // inclut les positions corrigées des postes affichés
     if (fit && state.results.length) {
       const b = L.latLngBounds([[state.site.lat, state.site.lon], ...state.results.map((r) => [r.p.lat, r.p.lon])]);
       map.fitBounds(b.pad(0.15));
@@ -179,11 +244,12 @@
     const qp = num(r.p.v.INFO_QP); // k€/MW
     const L_m = r.route ?? r.d * pr.kDet;
     const dep = Math.ceil(pr.p / pr.pDep);
-    const liaison = L_m * pr.cMl * dep;
+    const prixMl = pr.p <= pr.pSeuil ? pr.cMl : pr.cMl2;
+    const liaison = L_m * prixMl * dep;
     const cell = dep * pr.cCell;
     const qpart = qp !== null ? qp * 1e3 * pr.p : NaN;
     const raccord = liaison + cell + (Number.isFinite(qpart) ? qpart : 0);
-    return { qp, L_m, dep, liaison, cell, qpart, pdl: pr.cPdl, raccord, total: raccord + pr.cPdl, estimated: r.route === null };
+    return { qp, L_m, dep, prixMl, liaison, cell, qpart, pdl: pr.cPdl, raccord, total: raccord + pr.cPdl, estimated: r.route === null };
   }
 
   function renderList(firstFull) {
@@ -204,6 +270,7 @@
       const chips = [];
       chips.push(`<span class="chip">${esc(p.g1 || "RTE")}${p.g2 ? " / " + esc(p.g2) : ""}</span>`);
       if (p.ht) chips.push(`<span class="chip">${esc(p.ht)}</span>`);
+      if (p.moved) chips.push(`<span class="chip moved">position corrigée</span>`);
       if (p.pj === "1") chips.push(`<span class="chip warn">poste en projet S3REnR</span>`);
       if (cls === "part") chips.push(`<span class="chip warn">capacité &lt; ${fmt(pr.p)} MW</span>`);
       if (c.dep > 1) chips.push(`<span class="chip warn">${c.dep} départs HTA</span>`);
@@ -224,13 +291,14 @@
         ${tvx}
         <div class="cost">
           <div class="row"><span>Quote-part S3REnR (${fmt(pr.p)} MW)</span><b>${keur(c.qpart)}</b></div>
-          <div class="row"><span>Liaison HTA ${c.dep > 1 ? c.dep + " × " : ""}${km(c.L_m)}${c.estimated ? " (estimée)" : ""}</span><b>${keur(c.liaison)}</b></div>
+          <div class="row"><span>Liaison HTA ${c.dep > 1 ? c.dep + " × " : ""}${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.prixMl, 0)} €/m</span><b>${keur(c.liaison)}</b></div>
           <div class="row"><span>Cellule${c.dep > 1 ? "s" : ""} départ poste source</span><b>${keur(c.cell)}</b></div>
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
           <div class="row"><span>+ poste de livraison</span><b>${keur(c.total)}</b></div>
         </div>
-        <div class="links"><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a><span class="pm">màj ${esc(p.up || "—")}</span></div>`;
-      li.addEventListener("click", (e) => { if (e.target.closest("a")) return; select(idx); });
+        <div class="links"><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a>${p.moved ? `<button type="button" class="linkbtn reset">Rétablir la position Capareseau</button>` : ""}<span class="pm">màj ${esc(p.up || "—")}</span></div>`;
+      li.querySelector(".reset")?.addEventListener("click", (e) => { e.stopPropagation(); setPosteLatLng(p, null); });
+      li.addEventListener("click", (e) => { if (e.target.closest("a, button")) return; select(idx); });
       li.addEventListener("keydown", (e) => { if (e.key === "Enter") select(idx); });
       ol.appendChild(li);
     });
@@ -241,6 +309,13 @@
       ol.appendChild(li);
     }
     $("#copy").hidden = false;
+    $("#dragHint").hidden = false;
+  }
+  function refreshResults() {
+    if (!state.site) return;
+    renderList(nearest(state.site, params().p).firstFull);
+    document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel));
+    drawPostes();
   }
 
   function drawPostes() {
@@ -248,10 +323,15 @@
     const pr = params();
     state.results.forEach((r, idx) => {
       const cls = capClass(capOf(r.p), pr.p), col = capColor(cls);
-      L.polyline([[state.site.lat, state.site.lon], [r.p.lat, r.p.lon]], { color: col, weight: idx === state.sel ? 2.5 : 1.5, dashArray: "6 6", opacity: 0.9, interactive: false }).addTo(lyrLinks);
-      const html = `<div class="pin-poste" style="--c:${col}"><div class="pt"></div><div class="lab">${idx + 1} · ${fmt(capOf(r.p))} MW</div></div>`;
-      L.marker([r.p.lat, r.p.lon], { icon: L.divIcon({ className: "", html, iconSize: [0, 0] }), zIndexOffset: 500 - idx })
-        .on("click", () => select(idx)).bindPopup(postePopupHtml(r.p)).addTo(lyrPostes);
+      const line = L.polyline([[state.site.lat, state.site.lon], [r.p.lat, r.p.lon]], { color: col, weight: idx === state.sel ? 2.5 : 1.5, dashArray: "6 6", opacity: 0.9, interactive: false }).addTo(lyrLinks);
+      const html = `<div class="pin-poste${r.p.moved ? " moved" : ""}" style="--c:${col}"><div class="pt"></div><div class="lab">${idx + 1} · ${fmt(capOf(r.p))} MW</div></div>`;
+      L.marker([r.p.lat, r.p.lon], { icon: L.divIcon({ className: "", html, iconSize: [0, 0] }), zIndexOffset: 500 - idx, draggable: true, autoPan: true })
+        .bindTooltip(r.p.moved ? "Position corrigée — glisser pour ajuster" : "Glisser pour corriger la position", { direction: "bottom", offset: [0, 12] })
+        .on("dragstart", () => map.closePopup())
+        .on("drag", (e) => line.setLatLngs([[state.site.lat, state.site.lon], e.target.getLatLng()]))
+        .on("dragend", (e) => { state.lastDrag = Date.now(); setPosteLatLng(r.p, e.target.getLatLng()); })
+        .on("click", () => { if (Date.now() - state.lastDrag > 400) select(idx); })
+        .bindPopup(postePopupHtml(r.p)).addTo(lyrPostes);
       if (r.routeGeom) {
         L.geoJSON(r.routeGeom, { style: { color: idx === state.sel ? css("--accent") : col, weight: idx === state.sel ? 5 : 2.5, opacity: idx === state.sel ? 0.9 : 0.45 } }).addTo(lyrRoute);
       }
@@ -284,18 +364,24 @@
     const j = await r.json(); if (j.code !== "Ok" || !j.routes?.length) throw new Error("OSRM " + j.code);
     return { d: j.routes[0].distance, geom: j.routes[0].geometry, src: "OSM" };
   }
+  let routeTok = 0;
+  async function fetchRoute(a, b) {
+    try { return await routeIGN(a, b); } catch (_) { try { return await routeOSRM(a, b); } catch (__) { return null; } }
+  }
   async function computeRoutes() {
     const seq = ++state.routeSeq;
-    const site = state.site;
     for (const r of state.results) {
-      let res = null;
-      try { res = await routeIGN(site, r.p); } catch (_) { try { res = await routeOSRM(site, r.p); } catch (__) { res = null; } }
+      await routeOne(r);
       if (seq !== state.routeSeq) return; // un autre calcul a démarré
-      if (res) { r.route = res.d; r.routeGeom = res.geom; r.routeSrc = res.src; } else { r.routeSrc = "err"; }
-      renderList(nearest(site, params().p).firstFull);
-      document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel));
-      drawPostes();
     }
+  }
+  // (re)calcule l'itinéraire d'un poste ; ignoré si le poste ou le site a bougé entre-temps
+  async function routeOne(r) {
+    const tok = (r.tok = ++routeTok), site = state.site, to = { lat: r.p.lat, lon: r.p.lon };
+    const res = await fetchRoute(site, to);
+    if (r.tok !== tok || state.site !== site || !state.results.includes(r)) return;
+    if (res) { r.route = res.d; r.routeGeom = res.geom; r.routeSrc = res.src; } else { r.routeSrc = "err"; }
+    refreshResults();
   }
 
   /* ---------- projets ---------- */
@@ -433,12 +519,20 @@
   /* ---------- paramètres & export ---------- */
   ["#p", "#n", "#minCap", "#withCap", "#withRte"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (s === "#p") drawAllPostes(); analyse(false); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
-  ["#cMl", "#pDep", "#cCell", "#cPdl", "#kDet"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) { renderList(nearest(state.site, params().p).firstFull); document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel)); } }));
+  ["#cMl", "#cMl2", "#pSeuil", "#pDep", "#cCell", "#cPdl", "#kDet"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
+  $("#copyCorr").addEventListener("click", async () => {
+    const out = {};
+    for (const k of Object.keys(state.corr).sort()) out[k] = state.corr[k];
+    const btn = $("#copyCorr"), txt = JSON.stringify(out, null, 1);
+    try { await navigator.clipboard.writeText(txt); btn.textContent = "Copié : à coller dans data/postes-corrections.json"; }
+    catch (_) { btn.textContent = "Copie refusée par le navigateur"; }
+    setTimeout(applyCorrections, 3500);
+  });
   $("#copy").addEventListener("click", async () => {
     const pr = params();
-    const head = ["Rang", "Poste", "Code", "GRD", "Reste à affecter S3REnR (MW)", "Capacité réservée (MW)", "Remplissage", "Vol d'oiseau (km)", "Trajet piéton (km)", "Quote-part (k€/MW)", "Quote-part (k€)", "Liaison HTA (k€)", "Cellules (k€)", "Raccordement (k€)", "Avec poste de livraison (k€)", "Màj Capareseau"];
-    const rows = state.results.map((r, i) => { const c = costFor(r, pr), v = r.p.v; return [i + 1, r.p.n, r.p.c, r.p.g1 || "RTE", num(v.INFO_NA), num(v.INFO_CR), v.INFO_TX || "", (r.d / 1000).toFixed(2), r.route !== null ? (r.route / 1000).toFixed(2) : "", c.qp ?? "", Math.round(c.qpart / 1e3) || "", Math.round(c.liaison / 1e3), Math.round(c.cell / 1e3), Math.round(c.raccord / 1e3), Math.round(c.total / 1e3), r.p.up || ""]; });
-    const title = `Site ${state.site.lat.toFixed(5)}, ${state.site.lon.toFixed(5)} — ${fmt(pr.p)} MW — hypothèses ${pr.cMl} €/m HTA, ${pr.cCell / 1e3} k€/cellule, ${pr.pDep} MW/départ`;
+    const head = ["Rang", "Poste", "Code", "GRD", "Reste à affecter S3REnR (MW)", "Capacité réservée (MW)", "Remplissage", "Vol d'oiseau (km)", "Trajet piéton (km)", "Quote-part (k€/MW)", "Quote-part (k€)", "Liaison HTA (km)", "Prix HTA (€/m)", "Liaison HTA (k€)", "Cellules (k€)", "Raccordement (k€)", "Avec poste de livraison (k€)", "Màj Capareseau"];
+    const rows = state.results.map((r, i) => { const c = costFor(r, pr), v = r.p.v; return [i + 1, r.p.n, r.p.c, r.p.g1 || "RTE", num(v.INFO_NA), num(v.INFO_CR), v.INFO_TX || "", (r.d / 1000).toFixed(2), r.route !== null ? (r.route / 1000).toFixed(2) : "", c.qp ?? "", Math.round(c.qpart / 1e3) || "", (c.L_m / 1000).toFixed(2), c.prixMl, Math.round(c.liaison / 1e3), Math.round(c.cell / 1e3), Math.round(c.raccord / 1e3), Math.round(c.total / 1e3), (r.p.up || "") + (r.p.moved ? " (position corrigée)" : "")]; });
+    const title = `Site ${state.site.lat.toFixed(5)}, ${state.site.lon.toFixed(5)} — ${fmt(pr.p)} MW — hypothèses HTA ${pr.cMl} €/m jusqu'à ${fmt(pr.pSeuil)} MW et ${pr.cMl2} €/m au-delà, ${pr.cCell / 1e3} k€/cellule, ${pr.cPdl / 1e3} k€/poste de livraison, ${pr.pDep} MW/départ`;
     const tsv = [title, head.join("\t"), ...rows.map((r) => r.map((x) => String(x).replace(".", ",")).join("\t"))].join("\n");
     const btn = $("#copy");
     try { await navigator.clipboard.writeText(tsv); btn.textContent = "Tableau copié"; } catch (_) { btn.textContent = "Copie refusée par le navigateur"; }
@@ -455,21 +549,29 @@
       return;
     }
     try {
+      const cj = await fetch("data/postes-corrections.json").then((r) => (r.ok ? r.json() : {}));
+      for (const [k, v] of Object.entries(cj || {})) if (v && Number.isFinite(+v.lat) && Number.isFinite(+v.lon)) state.corrRepo[k] = { lat: +(+v.lat).toFixed(6), lon: +(+v.lon).toFixed(6), n: v.n };
+    } catch (_) {}
+    mergeCorr(state.corrRepo);
+    mergeCorr(loadLocalCorr());
+    try {
       const gj = await fetch("data/projets-locaux.geojson").then((r) => (r.ok ? r.json() : null));
       state.localProj = (gj?.features || []).map((f) => featureToProj(f, "local")).filter(Boolean);
     } catch (_) {}
     drawAllPostes();
     const m = state.meta;
     const regs = m ? Object.values(m.regions).map((r) => r.maj_max).filter(Boolean).sort() : [];
-    $("#meta").innerHTML = `<p>${m ? m.nb_postes.toLocaleString("fr-FR") : state.postes.length} postes · extraction Capareseau du ${m ? new Date(m.extraction).toLocaleDateString("fr-FR") : "—"}${regs.length ? ` (données régionales mises à jour entre le ${new Date(regs[0]).toLocaleDateString("fr-FR")} et le ${new Date(regs[regs.length - 1]).toLocaleDateString("fr-FR")})` : ""}. Corse et outre-mer non couverts par les S3REnR.</p>
+    $("#meta").innerHTML = `<p>${m ? m.nb_postes.toLocaleString("fr-FR") : state.postes.length} postes · extraction Capareseau du ${m ? new Date(m.extraction).toLocaleDateString("fr-FR") : "—"}${regs.length ? ` (données régionales mises à jour entre le ${new Date(regs[0]).toLocaleDateString("fr-FR")} et le ${new Date(regs[regs.length - 1]).toLocaleDateString("fr-FR")})` : ""}. Corse et outre-mer non couverts par les S3REnR.${Object.keys(state.corrRepo).length ? ` ${Object.keys(state.corrRepo).length} position(s) de poste corrigée(s) dans le dépôt.` : ""}</p>
       <p>Sources : <a href="https://www.capareseau.fr/" target="_blank" rel="noopener">Capareseau</a> (RTE, GRD), <a href="https://www.projets-environnement.gouv.fr/" target="_blank" rel="noopener">projets-environnement.gouv.fr</a>, itinéraires <a href="https://geoservices.ign.fr/" target="_blank" rel="noopener">IGN Géoplateforme</a> (secours OSRM/OSM). Les capacités évoluent en continu : seule une demande de raccordement (PTF) engage le gestionnaire de réseau.</p>`;
     const site = readHash();
-    drawAllPostes(); // couleurs selon la puissance lue dans l'URL
+    applyCorrections();
+    drawAllPostes(); // couleurs et positions selon l'URL
     if (site) { map.setView([site.lat, site.lon], 11); setSite(site.lat, site.lon); } else if (location.hash) writeHash();
   }
   // lien collé dans le même onglet : on réapplique tout
   window.addEventListener("hashchange", () => {
     const site = readHash();
+    applyCorrections();
     drawAllPostes();
     if (site) { map.setView([site.lat, site.lon], 11); setSite(site.lat, site.lon); } else analyse(false);
   });
