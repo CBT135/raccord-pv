@@ -113,6 +113,16 @@
   L.control.layers(base, overlays, { collapsed: true }).addTo(map);
   L.control.scale({ imperial: false }).addTo(map);
   let siteMarker = null;
+  // Carte ouverte dans un onglet masqué, rotation d'écran, redimensionnement : on remesure la carte,
+  // et si elle avait une taille nulle, on recadre sur le site et les postes.
+  let mapW = map.getContainer().clientWidth;
+  if ("ResizeObserver" in window) new ResizeObserver(() => {
+    const w = map.getContainer().clientWidth;
+    map.invalidateSize();
+    if (mapW === 0 && w > 0 && state.site && state.results.length)
+      map.fitBounds(L.latLngBounds([[state.site.lat, state.site.lon], ...state.results.map((r) => [r.p.lat, r.p.lon])]).pad(0.15));
+    mapW = w;
+  }).observe(map.getContainer());
 
   function drawAllPostes() {
     lyrAll.clearLayers();
