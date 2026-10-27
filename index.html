@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Raccord PV</title>
+<meta name="description" content="Pré-étude de raccordement PV : postes sources les plus proches, capacité S3REnR restant à affecter, itinéraire piéton, coût indicatif et projets en instruction.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true" class="logo"><path d="M4 26h24M8 26V12l8-6 8 6v14M12 26v-7h8v7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M16 2v4" stroke="currentColor" stroke-width="2.2"/></svg>
+    <h1>Raccord PV</h1>
+    <span class="tag">pré-étude de raccordement en injection</span>
+  </div>
+  <form id="search" class="search" autocomplete="off">
+    <label for="q" class="sr">Adresse, commune ou coordonnées</label>
+    <input id="q" type="search" placeholder="Adresse, commune ou « 45.61, 5.15 »">
+    <ul id="suggest" class="suggest" hidden></ul>
+  </form>
+</header>
+
+<main class="app">
+  <aside class="panel" id="panel">
+    <section class="block" id="params">
+      <h2>Projet</h2>
+      <div class="grid2">
+        <label>Puissance d'injection <span class="unit">MW</span>
+          <input id="p" type="number" min="0.1" step="0.1" value="10"></label>
+        <label>Postes affichés
+          <select id="n"><option>3</option><option>4</option><option selected>5</option></select></label>
+        <label>Capacité restante min. <span class="unit">MW</span>
+          <input id="minCap" type="number" min="0" step="0.5" value="0"></label>
+        <label>Rayon projets <span class="unit">km</span>
+          <input id="radius" type="number" min="2" max="80" step="1" value="20"></label>
+      </div>
+      <label class="check"><input id="withCap" type="checkbox" checked> Uniquement les postes avec capacité restante &gt; 0</label>
+      <label class="check"><input id="withRte" type="checkbox"> Inclure les postes RTE sans GRD (raccordement HTB)</label>
+      <label class="check"><input id="projYears" type="checkbox" checked> Projets : dossiers diffusés depuis moins de 5 ans</label>
+      <details class="hyp">
+        <summary>Hypothèses de coût</summary>
+        <div class="grid2">
+          <label>Liaison HTA souterraine <span class="unit">€/m</span><input id="cMl" type="number" step="10" value="160"></label>
+          <label>Puissance max par départ <span class="unit">MW</span><input id="pDep" type="number" step="0.5" value="12"></label>
+          <label>Cellule départ au poste source <span class="unit">k€</span><input id="cCell" type="number" step="5" value="120"></label>
+          <label>Poste de livraison <span class="unit">k€</span><input id="cPdl" type="number" step="5" value="90"></label>
+          <label>Détour si itinéraire indisponible <span class="unit">×</span><input id="kDet" type="number" step="0.05" value="1.3"></label>
+        </div>
+        <p class="note">Ordres de grandeur pour une pré-étude, à remplacer par vos propres ratios. La quote-part S3REnR est celle publiée par Capareseau pour chaque poste.</p>
+      </details>
+    </section>
+
+    <section class="block" id="results">
+      <div class="head">
+        <h2>Postes sources</h2>
+        <button type="button" id="copy" class="ghost" hidden>Copier le tableau</button>
+      </div>
+      <div id="site" class="site"></div>
+      <ol id="list" class="list"></ol>
+      <p id="hint" class="hint">Cliquez sur la carte pour placer le site envisagé. Le marqueur peut ensuite être déplacé.</p>
+    </section>
+
+    <section class="block" id="projects">
+      <div class="head">
+        <h2>Projets PV à proximité</h2>
+        <label class="file ghost" for="import">Importer GeoJSON / CSV<input id="import" type="file" accept=".geojson,.json,.csv"></label>
+      </div>
+      <div id="projSummary" class="hint">Les projets publiés sur projets-environnement.gouv.fr dans le rayon choisi s'affichent après le placement du site.</div>
+      <ul id="projList" class="plist"></ul>
+    </section>
+
+    <footer class="block foot" id="meta"></footer>
+  </aside>
+
+  <div class="mapwrap">
+    <div id="map" role="application" aria-label="Carte : cliquer pour placer le site"></div>
+    <div class="legend" id="legend">
+      <div><i class="dot ok"></i>capacité restante ≥ puissance</div>
+      <div><i class="dot part"></i>capacité partielle</div>
+      <div><i class="dot none"></i>pas de capacité réservée restante</div>
+      <div><i class="sq"></i>projet PV publié</div>
+      <div><i class="sq loc"></i>projet ajouté (CDPENAF, PC…)</div>
+    </div>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="js/app.js"></script>
+</body>
+</html>

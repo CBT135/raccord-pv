@@ -1,0 +1,6 @@
+{
+  "type": "FeatureCollection",
+  "name": "projets-locaux",
+  "description": "Projets PV connus hors projets-environnement.gouv.fr (CDPENAF, permis de construire, veille terrain). Un objet par projet : Point ou Polygon en WGS84. Propriétés lues : nom, procedure, statut, date, commune, puissance_mwc, source (URL), commentaire.",
+  "features": []
+}

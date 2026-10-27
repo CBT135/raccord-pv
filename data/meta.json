@@ -1,0 +1,67 @@
+{
+ "extraction": "2026-10-27",
+ "source": "capareseau.fr (extrait navigateur)",
+ "nb_postes": 3116,
+ "regions": {
+  "11": {
+   "nom": "Île-de-France",
+   "postes": 237,
+   "maj_max": "2026-06-27"
+  },
+  "24": {
+   "nom": "Centre-Val de Loire",
+   "postes": 158,
+   "maj_max": "2026-09-17"
+  },
+  "27": {
+   "nom": "Bourgogne-Franche-Comté",
+   "postes": 177,
+   "maj_max": "2026-06-27"
+  },
+  "28": {
+   "nom": "Normandie",
+   "postes": 151,
+   "maj_max": "2026-06-27"
+  },
+  "32": {
+   "nom": "Hauts-de-France",
+   "postes": 229,
+   "maj_max": "2026-10-21"
+  },
+  "44": {
+   "nom": "Grand Est",
+   "postes": 307,
+   "maj_max": "2026-06-27"
+  },
+  "52": {
+   "nom": "Pays de la Loire",
+   "postes": 176,
+   "maj_max": "2026-09-18"
+  },
+  "53": {
+   "nom": "Bretagne",
+   "postes": 166,
+   "maj_max": "2026-06-27"
+  },
+  "75": {
+   "nom": "Nouvelle-Aquitaine",
+   "postes": 415,
+   "maj_max": "2026-10-01"
+  },
+  "76": {
+   "nom": "Occitanie",
+   "postes": 360,
+   "maj_max": "2026-10-06"
+  },
+  "84": {
+   "nom": "Auvergne-Rhône-Alpes",
+   "postes": 494,
+   "maj_max": "2026-10-12"
+  },
+  "93": {
+   "nom": "Provence-Alpes-Côte d'Azur",
+   "postes": 246,
+   "maj_max": "2026-06-27"
+  }
+ }
+}
