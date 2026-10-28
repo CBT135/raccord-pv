@@ -26,6 +26,7 @@
   const C = {
     ink: [23, 33, 43], muted: [91, 107, 122], line: [217, 224, 230], band: [238, 242, 245], selRow: [222, 241, 244],
     accent: [11, 114, 133], ok: [43, 138, 62], part: [217, 138, 0], none: [201, 42, 42], proj: [112, 72, 232], loc: [232, 89, 12],
+    pv: [112, 72, 232], eol: [25, 113, 194], bess: [194, 37, 92],
   };
   const rgb = (a) => `rgb(${a.join(",")})`;
   const clsColor = (cls) => (cls === "ok" ? C.ok : cls === "part" ? C.part : C.none);
@@ -69,6 +70,7 @@
   async function renderMap(d, W, H, scale) {
     const pts = [[d.site.lat, d.site.lon], ...d.postes.map((p) => [p.lat, p.lon])];
     for (const p of d.postes) for (const c of coordsOf(p.routeGeom)) pts.push([c[1], c[0]]);
+    for (const p of d.projets) if (p.same) pts.push([p.lat, p.lon]); // projets raccordés au poste étudié toujours visibles
     // zoom continu : on cadre au plus juste, les tuiles du niveau entier le plus proche sont mises à l'échelle (×0,7 à ×1,4)
     const padX = 70, padY = 45, tiles = TILES[d.base] || TILES.plan;
     const xy0 = pts.map(([la, lo]) => worldPx(la, lo, 0)), xs0 = xy0.map((p) => p[0]), ys0 = xy0.map((p) => p[1]);
@@ -121,16 +123,29 @@
       }
     }
 
+    // zone de recherche des projets (union des cercles autour du site et du poste étudié)
+    if (d.zone && d.zone.rings) {
+      g.setLineDash([8, 7]); g.lineWidth = 1.5; g.strokeStyle = rgb(C.proj); g.globalAlpha = 0.8;
+      for (const ring of d.zone.rings) { g.beginPath(); ring.forEach(([la, lo], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.stroke(); }
+      g.setLineDash([]); g.globalAlpha = 1;
+    }
+
     // marqueurs (projets, postes, site), puis étiquettes placées sans se chevaucher
-    const marks = [];
-    for (const pr of d.projets) {
+    const marks = [], selP = d.postes[d.sel], [selX, selY] = P(selP.lat, selP.lon);
+    const projs = [...d.projets].sort((a, b) => a.same - b.same); // projets du poste étudié au-dessus
+    for (const pr of projs) {
       const [x, y] = P(pr.lat, pr.lon); if (x < 6 || y < 6 || x > W - 6 || y > H - 6) continue;
       pr.onMap = true;
-      g.save(); g.translate(x, y); g.rotate(Math.PI / 4);
-      g.fillStyle = rgb(pr.kind === "pe" ? C.proj : C.loc); g.strokeStyle = "#fff"; g.lineWidth = 1.6;
-      g.fillRect(-4.5, -4.5, 9, 9); g.strokeRect(-4.5, -4.5, 9, 9); g.restore();
-      placed.push([x - 7, y - 7, x + 7, y + 7]);
-      marks.push({ t: pr.label, x, y, col: rgb(pr.kind === "pe" ? C.proj : C.loc), size: 10, bold: false, off: 8, prio: 3 });
+      const t0 = pr.t[0] || "pv", col = rgb(C[t0]), r = pr.same ? 7.5 : 5;
+      if (pr.same) { g.setLineDash([2, 5]); g.lineWidth = 2; g.strokeStyle = rgb(C.accent); g.beginPath(); g.moveTo(x, y); g.lineTo(selX, selY); g.stroke(); g.setLineDash([]); }
+      g.save(); g.translate(x, y);
+      g.fillStyle = col; g.strokeStyle = "#fff"; g.lineWidth = pr.same ? 2.5 : 1.6;
+      if (t0 === "eol") { g.beginPath(); g.arc(0, 0, r, 0, 2 * Math.PI); g.fill(); g.stroke(); }
+      else { if (t0 === "pv") g.rotate(Math.PI / 4); g.fillRect(-r, -r, 2 * r, 2 * r); g.strokeRect(-r, -r, 2 * r, 2 * r); }
+      g.restore();
+      if (pr.same) { g.beginPath(); g.arc(x, y, r + 5, 0, 2 * Math.PI); g.strokeStyle = rgb(C.accent); g.lineWidth = 2.5; g.stroke(); }
+      placed.push([x - r - 3, y - r - 3, x + r + 3, y + r + 3]);
+      marks.push({ t: pr.label, x, y, col: pr.same ? rgb(C.accent) : col, size: pr.same ? 11 : 9.5, bold: pr.same, off: r + 5, prio: pr.same ? 1.5 : 3 });
     }
     d.postes.forEach((p, i) => {
       const [x, y] = P(p.lat, p.lon), col = rgb(clsColor(p.cls)), sel = i === d.sel;
@@ -247,10 +262,13 @@
     const items = [
       ["site", C.accent, "Site"], ["route", C.accent, "Trajet piéton du poste étudié"],
       ["sq", C.ok, "Capacité restante suffisante"], ["sq", C.part, "Capacité partielle"], ["sq", C.none, "Sans capacité restante"],
-      ["sq", C.proj, "Projet PV publié (P1…)"],
     ];
-    if (!d.projets.some((p) => p.onMap && p.kind === "pe")) items.pop(); // pas de projet publié sur la carte
-    if (d.projets.some((p) => p.onMap && p.kind !== "pe")) items.push(["sq", C.loc, "Projet ajouté"]);
+    const onMapT = (t) => d.projets.some((p) => p.onMap && p.t.includes(t));
+    if (onMapT("pv")) items.push(["dia", C.pv, "Projet PV (P1…)"]);
+    if (onMapT("eol")) items.push(["circ", C.eol, "Projet éolien"]);
+    if (onMapT("bess")) items.push(["sq", C.bess, "Projet de stockage"]);
+    if (d.projets.some((p) => p.onMap && p.same)) items.push(["ring", C.accent, "Raccordement envisagé sur le poste étudié"]);
+    if (d.zone) items.push(["zone", C.proj, `Zone de recherche (${fmt(d.pr.radius, 0)} km)`]);
     let lx = M;
     for (const [kind, col, txt] of items) {
       const tw = doc.getTextWidth(T(txt)) + 9;
@@ -258,6 +276,10 @@
       doc.setFillColor(...col); doc.setDrawColor(...col);
       if (kind === "site") doc.circle(lx + 1.6, y - 1, 1.4, "F");
       else if (kind === "route") { doc.setLineWidth(0.9); doc.line(lx, y - 1, lx + 4, y - 1); }
+      else if (kind === "circ") doc.circle(lx + 1.6, y - 1, 1.3, "F");
+      else if (kind === "ring") { doc.setLineWidth(0.5); doc.circle(lx + 1.6, y - 1, 1.4, "S"); }
+      else if (kind === "zone") { doc.setLineWidth(0.4); doc.setLineDashPattern([0.8, 0.6], 0); doc.line(lx, y - 1, lx + 4, y - 1); doc.setLineDashPattern([], 0); }
+      else if (kind === "dia") doc.lines([[1.3, -1.3], [1.3, 1.3], [-1.3, 1.3], [-1.3, -1.3]], lx + 0.3, y - 1, [1, 1], "F", true);
       else doc.rect(lx + 0.3, y - 2.3, 2.6, 2.6, "F");
       doc.text(T(txt), lx + 5, y);
       lx += tw;
@@ -363,22 +385,45 @@
     const nt = doc.splitTextToSize(T(`Ligne surlignée : poste étudié.${d.postes.some((p) => p.moved) ? " * position corrigée à la main." : ""} Montants calculés avec les mêmes hypothèses pour chaque poste ; trajet « — » : longueur estimée.`), W);
     doc.text(nt, M, y - 3); y += nt.length * 3.3;
 
-    // projets
+    // projets voisins
+    const zoneTxt = `dans un rayon de ${fmt(d.pr.radius, 0)} km autour du site et du poste ${P.nom}`;
     if (!d.projets.length) {
-      heading(`Projets PV dans un rayon de ${fmt(d.pr.radius, 0)} km`, 16);
+      heading("Projets voisins (PV, éolien, stockage de 1 MW et plus)", 16);
       set(8.5, "normal", C.ink);
-      doc.text(T(`Aucun projet PV publié sur projets-environnement.gouv.fr${d.projYears ? " depuis moins de 5 ans" : ""} dans ce rayon.`), M, y + 1); y += 8;
+      doc.text(doc.splitTextToSize(T(`Aucun projet ${zoneTxt}${d.projYears ? " (dossiers des 5 dernières années)" : ""}.`), W), M, y + 1); y += 9;
     } else {
-      heading(`Projets PV dans un rayon de ${fmt(d.pr.radius, 0)} km`, 35);
-      const list = d.projets.slice(0, 20);
+      heading("Projets voisins (PV, éolien, stockage de 1 MW et plus)", 45);
+      const same = d.projets.filter((p) => p.same), sumSame = same.reduce((a, p) => a + (p.mw || 0), 0), unk = same.filter((p) => p.mw === null).length;
+      set(8.5, "normal", C.ink);
+      const intro = doc.splitTextToSize(T(`${d.projets.length} projet(s) ${zoneTxt}${d.projYears ? " (dossiers des 5 dernières années)" : ""}.`), W);
+      doc.text(intro, M, y + 1); y += intro.length * 3.8 + 1;
+      if (same.length) {
+        const txt = doc.splitTextToSize(T(`${same.length} projet(s) envisagent un raccordement sur ${P.nom} : ${fmt(sumSame, 1)} MW${unk ? ` (+ ${unk} de puissance non renseignée)` : ""}, pour ${fmt(P.cap)} MW de capacité réservée S3REnR restante.`), W - 6);
+        const h = txt.length * 3.8 + 3;
+        doc.setFillColor(...C.selRow); doc.setDrawColor(...C.accent); doc.setLineWidth(0.3); doc.rect(M, y - 0.5, W, h, "FD");
+        set(8.5, "bold", C.accent); doc.text(txt, M + 3, y + 3); y += h + 3;
+      } else {
+        set(8.5, "normal", C.muted); doc.text(T(`Aucun de ces projets ne cite ${P.nom} comme poste de raccordement dans les documents lus.`), M, y + 1); y += 6;
+      }
+      const list = d.projets.slice(0, 25);
+      const tn = { pv: "PV", eol: "Éolien", bess: "Stockage" };
       table({
-        head: [["Repère", "Projet", "Statut", "Date", "Puissance", "Distance"]],
-        body: list.map((p) => [p.label + (p.onMap ? "" : " (hors carte)"), p.title, p.statut || "—", p.date || "—", p.puissance || "—", kmTxt(p.d)]),
-        styles: { font: "helvetica", fontSize: 7.6, cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 }, textColor: C.ink, lineColor: C.line, lineWidth: { bottom: 0.15 }, overflow: "linebreak" },
+        head: [["Repère", "Projet", "Type", "Puissance", "Procédure / statut", "Date", "Raccordement envisagé", "Distance"]],
+        body: list.map((p) => [p.label + (p.onMap ? "" : "\n(hors carte)"), p.n + (p.com ? ` (${p.com})` : ""), p.t.map((t) => tn[t]).join(" + "),
+          p.mw !== null && p.mw !== undefined ? `${fmt(p.mw, p.mw < 10 ? 1 : 0)} MW${p.mwh ? ` / ${fmt(p.mwh, 0)} MWh` : ""}` : "n.c.",
+          p.st || p.pr || "—", p.date ? new Date(p.date).toLocaleDateString("fr-FR") : "—", p.rac.length ? p.rac.join(" ou ") : "non indiqué",
+          `${kmTxt(p.d)} du site${Number.isFinite(p.dP) ? `\n${kmTxt(p.dP)} du poste` : ""}`]),
+        styles: { font: "helvetica", fontSize: 7.2, cellPadding: { top: 1.1, bottom: 1.1, left: 1.1, right: 1.1 }, textColor: C.ink, lineColor: C.line, lineWidth: { bottom: 0.15 }, overflow: "linebreak" },
         headStyles: { fillColor: C.proj, textColor: 255, fontStyle: "bold", lineWidth: 0 },
-        columnStyles: { 0: { cellWidth: 16 }, 1: { cellWidth: 70 }, 3: { cellWidth: 18 }, 4: { cellWidth: 18 }, 5: { cellWidth: 17, halign: "right" } },
+        columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 42 }, 2: { cellWidth: 14 }, 3: { cellWidth: 16 }, 4: { cellWidth: 26 }, 5: { cellWidth: 15 }, 6: { cellWidth: 33 }, 7: { cellWidth: 22 } },
+        didParseCell: (h) => {
+          if (h.section === "body" && list[h.row.index]?.same) { h.cell.styles.fillColor = C.selRow; h.cell.styles.fontStyle = "bold"; if (h.column.index === 6) h.cell.styles.textColor = C.accent; }
+          if (h.section === "body" && h.column.index === 2) { const t0 = list[h.row.index]?.t[0]; if (t0) h.cell.styles.textColor = C[t0]; }
+        },
       });
-      if (d.projets.length > list.length) { set(7.5, "normal", C.muted); doc.text(T(`… et ${d.projets.length - list.length} autre(s) projet(s), visibles dans l'outil.`), M, y - 3); y += 2; }
+      set(7.5, "normal", C.muted);
+      const nt2 = doc.splitTextToSize(T(`Lignes surlignées : raccordement envisagé sur ${P.nom}. « Raccordement envisagé » : poste(s) cité(s) dans l'avis de l'autorité environnementale, le résumé non technique ou l'avis d'enquête ; plusieurs postes = options étudiées. n.c. : puissance non communiquée.${d.projets.some((p) => p.geo === "c") ? " Projets connus par un avis ou une publication préfectorale : position au centre de la commune." : ""}${d.projets.length > list.length ? ` Liste limitée aux ${list.length} premiers sur ${d.projets.length}.` : ""}`), W);
+      doc.text(nt2, M, y - 3); y += nt2.length * 3.3;
     }
 
     // hypothèses, sources, limites
@@ -388,7 +433,7 @@
       `Capacités d'accueil, quote-part et travaux : Capareseau (RTE et gestionnaires de distribution), extraction du ${d.extraction || "—"}, mise à jour du poste étudié le ${P.up || "—"}. Les capacités évoluent en continu : seule une demande de raccordement (proposition technique et financière) engage le gestionnaire de réseau.`,
       `Coût : quote-part S3REnR × puissance d'injection, plus liaison HTA souterraine sur la longueur du trajet piéton (${fmt(d.pr.cMl, 0)} €/m jusqu'à ${fmt(d.pr.pSeuil)} MW d'injection, ${fmt(d.pr.cMl2, 0)} €/m au-delà ; ${fmt(d.pr.pDep)} MW max par départ), cellule(s) départ à ${fmt(d.pr.cCell / 1e3, 0)} k€ et poste de livraison à ${fmt(d.pr.cPdl / 1e3, 0)} k€. Ordres de grandeur pour une pré-étude, hors renforcements, études et frais de gestion.`,
       "Trajet : itinéraire piéton IGN Géoplateforme (BD TOPO), à défaut OSRM (OpenStreetMap). Il approxime le tracé sous voirie et ne tient pas compte des traversées (voies ferrées, autoroutes, cours d'eau) ni des contraintes de pose.",
-      `Projets : projets-environnement.gouv.fr (dossiers soumis à évaluation environnementale)${d.projets.some((p) => p.kind !== "pe") ? " et projets ajoutés par l'utilisateur" : ""}. Fond de carte : ${map ? map.attr : "—"}.`,
+      `Projets voisins : ${d.projMeta ? `collecte du ${new Date(d.projMeta.collecte).toLocaleDateString("fr-FR")} sur projets-environnement.gouv.fr, les avis MRAe (plateforme nationale et sites régionaux) et les sites des préfectures (participations du public, enquêtes publiques)` : "projets-environnement.gouv.fr"}${d.projets.some((p) => p.kind === "local" || p.kind === "import") ? ", plus les projets ajoutés par l'utilisateur" : ""}. Seuls les projets d'au moins 1 MW, ou de puissance non communiquée, sont retenus. Fond de carte : ${map ? map.attr : "—"}.`,
     ];
     for (const t of notes) { const L = doc.splitTextToSize(T(t), W); ensure(L.length * 3.4 + 2); doc.text(L, M, y); y += L.length * 3.4 + 1.6; }
     ensure(10);

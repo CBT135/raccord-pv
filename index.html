@@ -38,7 +38,7 @@
           <select id="n"><option>3</option><option>4</option><option selected>5</option></select></label>
         <label>Capacité restante min. <span class="unit">MW</span>
           <input id="minCap" type="number" min="0" step="0.5" value="0"></label>
-        <label>Rayon projets <span class="unit">km</span>
+        <label>Rayon projets (site et poste) <span class="unit">km</span>
           <input id="radius" type="number" min="2" max="80" step="1" value="20"></label>
       </div>
       <label class="check"><input id="withCap" type="checkbox" checked> Uniquement les postes avec capacité restante &gt; 0</label>
@@ -75,10 +75,16 @@
 
     <section class="block" id="projects">
       <div class="head">
-        <h2>Projets PV à proximité</h2>
+        <h2>Projets voisins</h2>
         <label class="file ghost" for="import">Importer GeoJSON / CSV<input id="import" type="file" accept=".geojson,.json,.csv"></label>
       </div>
-      <div id="projSummary" class="hint">Les projets publiés sur projets-environnement.gouv.fr dans le rayon choisi s'affichent après le placement du site.</div>
+      <div class="tfilters" role="group" aria-label="Types de projets">
+        <label class="tf t-pv"><input id="t_pv" type="checkbox" checked> PV</label>
+        <label class="tf t-eol"><input id="t_eol" type="checkbox" checked> Éolien</label>
+        <label class="tf t-bess"><input id="t_bess" type="checkbox" checked> Stockage</label>
+        <label class="tf"><input id="projUnknown" type="checkbox" checked> puissance non renseignée</label>
+      </div>
+      <div id="projSummary" class="hint">Projets en injection de 1 MW et plus (PV, éolien, stockage), dans le rayon choisi autour du site et autour du poste sélectionné. Ils s'affichent après le placement du site.</div>
       <ul id="projList" class="plist"></ul>
     </section>
 
@@ -91,8 +97,10 @@
       <div><i class="dot ok"></i>capacité restante ≥ puissance</div>
       <div><i class="dot part"></i>capacité partielle</div>
       <div><i class="dot none"></i>pas de capacité réservée restante</div>
-      <div><i class="sq"></i>projet PV publié</div>
-      <div><i class="sq loc"></i>projet ajouté (CDPENAF, PC…)</div>
+      <div><i class="lg t-pv"></i>projet PV</div>
+      <div><i class="lg t-eol"></i>projet éolien</div>
+      <div><i class="lg t-bess"></i>projet de stockage</div>
+      <div><i class="lg same"></i>raccordement envisagé sur le poste étudié</div>
     </div>
   </div>
 </main>

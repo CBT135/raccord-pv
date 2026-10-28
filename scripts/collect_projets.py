@@ -231,6 +231,9 @@ def find_postes(text, cands):
     if not cands:
         return []
     t = norm(text)
+    orig = re.sub(r"\s+", " ", text or "")
+    opos = [m.start() for m in re.finditer(r"\bpostes?\b", orig, re.I)]
+    npos = [m.start() for m in re.finditer(r"\bPOSTES?\b", t)]
     found, seen = [], set()
     for m in re.finditer(r"\bPOSTE", t):
         after = t[m.end(): m.end() + 140]
@@ -249,6 +252,12 @@ def find_postes(text, cands):
             rest = after[best[3]: best[3] + 70]
             km = re.search(r"\b(\d+(?:\.\d+)?) KM\b", rest)
             ex = t[max(0, m.start() - 90): m.end() + best[3] + 60]
+            if m.start() in npos and len(opos) == len(npos):  # même occurrence dans le texte d'origine
+                o = opos[npos.index(m.start())]
+                a, b = max(0, o - 110), min(len(orig), o + 200)
+                a = orig.rfind(" ", 0, a) + 1 if a else 0
+                b = orig.find(" ", b) if orig.find(" ", b) > 0 else len(orig)
+                ex = ("…" if a else "") + orig[a:b].strip() + ("…" if b < len(orig) else "")
             found.append((p, float(km.group(1)) if km else None, ex))
     return found
 
@@ -686,7 +695,8 @@ def src_pref(geo, cache, depts=None):
             kept += 1
             proc = pref_proc(nt)
             dates = re.search(r"DU (\d{1,2}(?:ER)? [A-Z]+ \d{4}) (?:INCLUS )?AU (\d{1,2}(?:ER)? [A-Z]+ \d{4})", nt)
-            st = proc + (f" du {fr_date(dates.group(1))} au {fr_date(dates.group(2))}" if dates and fr_date(dates.group(1)) else "")
+            fd = lambda x: dt.date.fromisoformat(x).strftime("%d/%m/%Y") if x else ""
+            st = proc + (f" du {fd(fr_date(dates.group(1)))} au {fd(fr_date(dates.group(2)))}" if dates and fr_date(dates.group(1)) and fr_date(dates.group(2)) else "")
             out.append({
                 "src": "Préfecture", "id": f"pref:{href}", "n": ent["title"][:220], "t": ty, "desc": text[:600],
                 "lat": g[0], "lon": g[1], "geo": "c", "insee": g[2], "com": g[3], "dep": dep,

@@ -7,7 +7,7 @@ Outil cartographique de pré-étude de raccordement d'un projet photovoltaïque 
 3. Il calcule le **trajet piéton** site → poste (IGN Géoplateforme, BD TOPO ; secours OSRM/OSM) et un lien Google Maps pour vérifier.
 4. Il chiffre un **coût de raccordement indicatif** : quote-part S3REnR du poste + liaison HTA souterraine sur la longueur du trajet + cellule(s) départ au poste source (+ poste de livraison). Les ratios sont modifiables dans « Hypothèses de coût ».
    Valeurs par défaut : liaison HTA 140 €/m jusqu'à 10 MW d'injection et 180 €/m au-delà, cellule départ 90 k€, poste de livraison 180 k€, 12 MW par départ HTA.
-5. Il positionne les **projets PV publiés** sur projets-environnement.gouv.fr (études d'impact, avis de l'autorité environnementale, enquêtes et consultations, permis de construire) dans un rayon réglable, ainsi que les projets saisis à la main.
+5. Il positionne les **projets voisins en injection** (PV, éolien, stockage ≥ 1 MW) autour du site et du poste sélectionné, avec leur poste de raccordement envisagé quand il est publié (voir plus bas).
 
 Le bouton « Copier le tableau » met les résultats dans le presse-papiers au format tableur.
 
@@ -79,18 +79,36 @@ Champs Capareseau conservés (voir `site/datas/AttributeConfig.json` sur capares
 - `RTE_CDR`, `GRD1_CDR` capacité réservée disponible sans travaux vue de RTE / du GRD
 - `RTE_TVX` travaux prévus au schéma
 
-## Projets non publiés sur projets-environnement (CDPENAF, PC sans étude d'impact…)
+## Projets voisins (PV, éolien, stockage de 1 MW et plus)
 
-Il n'existe pas de base nationale des avis CDPENAF ni des permis de construire en cours. Deux façons de les ajouter :
+La page affiche les projets en injection situés dans le rayon choisi **autour du site et autour du poste sélectionné** (les deux cercles sont fusionnés). Sont retenus les projets photovoltaïques, éoliens et de stockage d'au moins 1 MW, ainsi que ceux dont la puissance n'est pas communiquée (case à cocher).
 
-- **Ponctuellement** : bouton « Importer GeoJSON / CSV » (CSV avec colonnes `lat`, `lon`, et si possible `nom`, `procedure`, `statut`, `date`, `puissance_mwc`, `source`). L'import reste dans le navigateur.
-- **Durablement** : compléter `data/projets-locaux.geojson` dans le dépôt (mêmes propriétés). Exemple d'objet :
+Pour chaque projet, la page indique le **poste de raccordement envisagé** quand les documents publiés le citent. Les projets qui citent le poste sélectionné sont mis en évidence (marqueur cerclé, éclair, trait vers le poste) ; leurs caractéristiques s'affichent au survol. Le bilan compare leur puissance cumulée à la capacité réservée restante du poste.
+
+### Collecte hebdomadaire (GitHub Actions)
+
+`scripts/collect_projets.py`, lancé chaque lundi (onglet **Actions** → « Collecte des projets voisins » → **Run workflow** pour une collecte immédiate), écrit `data/projets.json` à partir de :
+
+| Source | Contenu | Position |
+|---|---|---|
+| [projets-environnement.gouv.fr](https://www.projets-environnement.gouv.fr/) | dossiers d'étude d'impact | précise |
+| [Plateforme de l'évaluation environnementale](https://evaluation-environnementale.ecologie.gouv.fr/) (NOVAE) | avis MRAe et décisions au cas par cas depuis 2025 | centre de la commune |
+| [Sites des MRAe](https://www.mrae.developpement-durable.gouv.fr/) | avis rendus sur projets 2022 à 2025 | centre de la commune |
+| Sites des préfectures (`www.<département>.gouv.fr`) | participations du public par voie électronique (PPVE), enquêtes publiques | centre de la commune |
+
+Pour chaque projet, l'avis de l'autorité environnementale, le résumé non technique ou l'avis d'enquête (25 Mo au plus) est lu pour en tirer la puissance et les postes sources cités. Un poste n'est retenu que s'il figure dans Capareseau à moins de 55 km du projet ; plusieurs postes cités = options de raccordement. Les doublons entre sources sont fusionnés. `data/projets-cache.json` garde les documents déjà lus : chaque passage ne lit que les nouveaux.
+
+### Projets non publiés (CDPENAF, permis de construire…)
+
+- **Ponctuellement** : bouton « Importer GeoJSON / CSV » (CSV avec colonnes `lat`, `lon`, et si possible `nom`, `type`, `puissance_mw`, `procedure`, `statut`, `date`, `poste_raccordement`, `source`). L'import reste dans le navigateur.
+- **Durablement** : compléter `data/projets-locaux.geojson` dans le dépôt. Exemple :
 
 ```json
 { "type": "Feature",
   "geometry": { "type": "Point", "coordinates": [5.15, 45.61] },
-  "properties": { "nom": "Centrale PV de …", "procedure": "Avis CDPENAF", "statut": "Avis favorable",
-                  "date": "2026-09-12", "puissance_mwc": 8.5, "source": "https://…" } }
+  "properties": { "nom": "Centrale PV de …", "type": "pv", "puissance_mw": 8.5, "procedure": "Avis CDPENAF",
+                  "statut": "Avis favorable", "date": "2026-09-12", "poste_raccordement": "ST-QUENTIN-FALLAVIER",
+                  "source": "https://…" } }
 ```
 
 ## Limites
@@ -99,6 +117,7 @@ Il n'existe pas de base nationale des avis CDPENAF ni des permis de construire e
 - Le trajet piéton approxime le tracé d'une liaison souterraine sous voirie ; il ne tient pas compte des traversées (voies ferrées, autoroutes, cours d'eau) ni des contraintes de pose.
 - Au-delà de la puissance par départ HTA retenue (12 MW par défaut), l'outil compte plusieurs départs ; au-delà de 17 MW un raccordement HTB doit être étudié.
 - Corse et outre-mer ne sont pas couverts par Capareseau / les S3REnR.
+- Projets voisins : le poste de raccordement n'est connu que s'il est écrit dans les documents lus ; les projets connus par un avis MRAe ou une publication préfectorale sont placés au centre de la commune ; la puissance est lue dans le titre ou les documents et peut manquer.
 
 ## Développement
 

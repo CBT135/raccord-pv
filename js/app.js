@@ -12,7 +12,7 @@
   const PV_RE = /photovolta|solaire|agrivolta|\bPV\b|ombri[eè]re/i;
 
   const state = { postes: [], meta: null, site: null, results: [], sel: 0, localProj: [], importedProj: [], projects: [], routeSeq: 0,
-    corr: {}, corrRepo: {}, lastDrag: 0, corrError: null, reporting: null };
+    corr: {}, corrRepo: {}, lastDrag: 0, corrError: null, reporting: null, collected: [], projMeta: null, live: null, liveSig: null, liveErr: null };
   const LS_CORR = "raccordpv.positions"; // positions corrigées dans ce navigateur
 
   /* ---------- utilitaires ---------- */
@@ -85,6 +85,7 @@
     if (i >= 0) state.sel = i;
     writeHash();
     refreshResults();
+    refreshProjects();
   }
 
   /* ---------- carte ---------- */
@@ -153,7 +154,7 @@
    * Le site est facultatif ; les anciens liens « #lat,lon » restent valides. */
   const URL_FIELDS = [
     ["nom", "#nom"], ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
-    ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"],
+    ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"], ["tpv", "#t_pv"], ["teol", "#t_eol"], ["tbess", "#t_bess"], ["pu", "#projUnknown"],
     ["ml", "#cMl"], ["ml2", "#cMl2"], ["seuil", "#pSeuil"], ["dep", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"],
   ];
   const COST_KEYS = ["ml", "ml2", "seuil", "dep", "cell", "pdl", "k"];
@@ -338,7 +339,10 @@
         return { nom: p.n, code: p.c, r: p.r, grd: [p.g1 || "RTE", p.g2].filter(Boolean).join(" / "), ht: p.ht, pj: p.pj, up: p.up, moved: !!p.moved,
           lat: p.lat, lon: p.lon, v: p.v, cap, cls: capClass(cap, pr.p), d: r.d, route: r.route, routeSrc: r.routeSrc, routeGeom: r.routeGeom, cost: costFor(r, pr) };
       }),
-      projets: state.projects.map((x, i) => ({ label: "P" + (i + 1), kind: x.kind, title: x.title, statut: x.statut, date: x.date, puissance: x.puissance, d: x.d, lat: x.lat, lon: x.lon })),
+      projets: state.projects.map((x) => ({ label: x.label, kind: x.kind, n: x.n, t: x.t, mw: x.mw, mwh: x.mwh, st: x.st, pr: x.pr, date: x.d, com: x.com, dep: x.dep,
+        d: x.d0, dP: x.dP, lat: x.lat, lon: x.lon, same: x.same, geo: x.geo, rac: x.rac.map((r) => r.n + (r.km ? ` (${fmt(r.km, 0)} km)` : "")), src: x.src })),
+      zone: (() => { const A = projArea(); return { R: A.R, centers: A.centers, rings: unionRings(A.centers, A.R) }; })(),
+      projMeta: state.projMeta,
       regionNom: (code) => state.meta?.regions?.[code]?.nom || code,
       extraction: state.meta ? new Date(state.meta.extraction).toLocaleDateString("fr-FR") : null,
       url: location.href,
@@ -346,6 +350,7 @@
   }
   async function report(idx, btn) {
     if (state.reporting !== null || !window.RaccordReport) return;
+    if (state.sel !== idx) select(idx); // zone et projets voisins calculés pour ce poste
     state.reporting = idx; refreshResults();
     let msg = null;
     try {
@@ -387,6 +392,7 @@
     state.sel = idx;
     document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === idx));
     drawPostes();
+    refreshProjects();
     const r = state.results[idx];
     if (r) {
       const pts = [[state.site.lat, state.site.lon], [r.p.lat, r.p.lon]];
@@ -430,78 +436,191 @@
     refreshResults();
   }
 
-  /* ---------- projets ---------- */
-  function classify(x) {
-    if (x.vp_status === "ouvert") return "Consultation du public en cours";
-    if (x.dc_relation_decision) return "Décision publiée";
-    if (x.dc_relation_expertise_avisae) return "Avis de l'autorité environnementale publié";
-    return "Dossier publié";
+  /* ---------- projets voisins (PV, éolien, stockage ≥ 1 MW) ----------
+   * Source principale : data/projets.json (collecte hebdomadaire : projets-environnement, avis MRAe, préfectures),
+   * complété par data/projets-locaux.geojson et les fichiers importés. À défaut de collecte, interrogation directe
+   * de projets-environnement.gouv.fr.
+   * Zone : union des cercles de rayon R autour du site et du poste sélectionné. */
+  const TYPES = { pv: "PV", eol: "Éolien", bess: "Stockage" };
+  const TYPE_RX = {
+    eol: /[ée]olien|a[ée]rog[ée]n[ée]rateur/i,
+    bess: /stockage (?:d['’ ]?)?(?:[ée]nergie|[ée]lectricit[ée]|par batterie)|batteries? de stockage|\bBESS\b|stockage par batteries?|syst[èe]me de stockage/i,
+    pv: /photovolta|agrivolta|agrisolaire|centrale solaire|parc solaire|ferme solaire|ombri[èe]re|solaire flottant|solaire au sol/i,
+  };
+  const typesOf = (txt) => Object.keys(TYPE_RX).filter((k) => TYPE_RX[k].test(txt || "")).sort((a, b) => ["pv", "eol", "bess"].indexOf(a) - ["pv", "eol", "bess"].indexOf(b));
+  function mwOf(txt) {
+    const t = String(txt || "").replace(/[  ]/g, " ");
+    const m = t.match(/(\d{1,3}(?: \d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s*(GWc?|MWc|MWp|MWe|MW|kWc|kWp|kW)\b(?!\s*h)/i);
+    if (!m) return null;
+    let v = parseFloat(m[1].replace(/ /g, "").replace(",", "."));
+    const u = m[2].toLowerCase();
+    if (u.startsWith("k")) v /= 1000; else if (u.startsWith("g")) v *= 1000;
+    return Number.isFinite(v) ? v : null;
   }
-  const mwc = (t) => { const m = String(t || "").match(/(\d+(?:[.,]\d+)?)\s*(MWc|MWp|MW)\b/i); return m ? m[1].replace(",", ".") + " " + m[2] : null; };
+  const normName = (s) => String(s || "").replace(/[’'`´]/g, " ").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase()
+    .replace(/\(.*?\)/g, " ").replace(/[^A-Z0-9]+/g, " ").replace(/\bSTE\b/g, "SAINTE").replace(/\bST\b/g, "SAINT").replace(/\bMT\b/g, "MONT").replace(/\s+/g, " ").trim();
+  // « Pons », « 75:PONS » ou « PONS, JONZAC » → postes Capareseau proches (60 km)
+  function postesFromText(txt, lat, lon) {
+    const out = [];
+    for (const part of String(txt || "").split(/[;,/]|\bou\b/i).map((x) => x.trim()).filter(Boolean)) {
+      const byKey = state.postes.find((p) => keyOf(p) === part.toUpperCase());
+      const nn = normName(part);
+      const hit = byKey || state.postes.filter((p) => normName(p.n) === nn).sort((a, b) => haversine({ lat, lon }, a) - haversine({ lat, lon }, b))[0];
+      if (hit && haversine({ lat, lon }, hit) < 60000 && !out.some((r) => r.k === keyOf(hit))) out.push({ k: keyOf(hit), n: hit.n, km: null });
+    }
+    return out;
+  }
+  const projOf = (o) => ({ t: [], mw: null, mwh: null, geo: "p", com: null, dep: null, d: "", st: "", pr: "", src: [], l: [], rac: [], x: null, raw: [], ...o });
 
-  async function loadProjects() {
-    const pr = params(), site = state.site;
-    lyrProj.clearLayers(); lyrRadius.clearLayers();
-    L.circle([site.lat, site.lon], { radius: pr.radius * 1000, color: css("--proj"), weight: 1, dashArray: "4 6", fill: false, interactive: false }).addTo(lyrRadius);
-    $("#projSummary").textContent = "Recherche des projets publiés…";
-    let where = `within_distance(geo_point_2d, geom'POINT(${site.lon.toFixed(5)} ${site.lat.toFixed(5)})', ${pr.radius}km) and (search("photovolta") or search("solaire") or search("agrivolta"))`;
-    if (pr.projYears) { const d = new Date(); d.setFullYear(d.getFullYear() - 5); where += ` and dc_date >= date'${d.toISOString().slice(0, 10)}'`; }
-    const sel = "dc_title,descriptif_du_projet,dc_type,vp_status,dc_date,date_de_la_prefecture,dateouverture,datefermeture,dc_location,geo_point_2d,localisation,dc_relation_decision,dc_relation_expertise_avisae,dc_relation_expertise_etudeimpact,dc_relation_synthesis,dc_relation_informationnote,dc_relation_websitedebate,dc_subject_category,recordsid,source";
-    let remote = [], err = null;
+  function projArea() {
+    const R = params().radius * 1000, sel = state.results[state.sel] || null;
+    const centers = [{ lat: state.site.lat, lon: state.site.lon }];
+    if (sel) centers.push({ lat: sel.p.lat, lon: sel.p.lon });
+    return { R, centers, sel };
+  }
+  // contour de l'union de deux cercles (repère local en mètres)
+  function unionRings(centers, R) {
+    const c0 = centers[0], k = Math.cos((c0.lat * Math.PI) / 180);
+    const toXY = (c) => [(c.lon - c0.lon) * 111320 * k, (c.lat - c0.lat) * 110574];
+    const toLL = ([x, y]) => [c0.lat + y / 110574, c0.lon + x / (111320 * k)];
+    const N = 180, ring = (c) => { const [cx, cy] = toXY(c); return Array.from({ length: N }, (_, i) => [cx + R * Math.cos((2 * Math.PI * i) / N), cy + R * Math.sin((2 * Math.PI * i) / N)]); };
+    if (centers.length < 2) return [ring(c0).map(toLL)];
+    const [a, b] = centers.map(toXY), d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (d < 1) return [ring(c0).map(toLL)];
+    if (d >= 2 * R) return centers.map((c) => ring(c).map(toLL));
+    const ra = ring(centers[0]), rb = ring(centers[1]);
+    const outside = (pts, o) => pts.map(([x, y]) => Math.hypot(x - o[0], y - o[1]) > R);
+    const run = (pts, out) => { // portion hors de l'autre cercle, dans l'ordre trigonométrique
+      const s = out.findIndex((v, i) => v && !out[(i - 1 + N) % N]);
+      const r = []; for (let i = 0; i < N && out[(s + i) % N]; i++) r.push(pts[(s + i) % N]);
+      return r;
+    };
+    return [[...run(ra, outside(ra, b)), ...run(rb, outside(rb, a))].map(toLL)];
+  }
+
+  // repli : interrogation directe de projets-environnement.gouv.fr tant que la collecte n'existe pas
+  async function liveFallback(A) {
+    const sig = A.centers.map((c) => c.lat.toFixed(3) + "," + c.lon.toFixed(3)).join(";") + "|" + A.R;
+    if (state.liveSig === sig) return;
+    state.liveSig = sig; state.live = [];
+    const zone = A.centers.map((c) => `within_distance(geo_point_2d, geom'POINT(${c.lon.toFixed(5)} ${c.lat.toFixed(5)})', ${A.R / 1000}km)`).join(" or ");
+    const where = `(${zone}) and (search("photovolta") or search("solaire") or search("agrivolta") or search("éolien") or search("aérogénérateur") or search("stockage"))`;
+    const sel = "dc_title,descriptif_du_projet,dc_type,vp_status,dc_date,dc_location,geo_point_2d,dc_relation_decision,dc_relation_expertise_avisae,dc_relation_synthesis,dc_relation_informationnote,dc_relation_websitedebate,dc_subject_category,recordsid";
     try {
-      const u = API_PROJ + "?" + new URLSearchParams({ where, select: sel, limit: "100", order_by: "dc_date desc" });
-      const r = await fetch(u); const j = await r.json();
-      if (!r.ok) throw new Error(j.message || r.status);
-      remote = (j.results || []).filter((x) => x.geo_point_2d && PV_RE.test([x.dc_title, x.descriptif_du_projet, x.dc_subject_category].flat().join(" ")));
-    } catch (e) { err = e.message || String(e); }
-    if (state.site !== site) return;
-    const projs = remote.map((x) => ({
-      kind: "pe", title: x.dc_title, lat: x.geo_point_2d.lat, lon: x.geo_point_2d.lon, geom: x.localisation?.geometry,
-      proc: [].concat(x.dc_type || []).join(", "), statut: classify(x), date: (x.dc_date || "").slice(0, 10), dep: x.dc_location,
-      puissance: mwc(x.descriptif_du_projet) || mwc(x.dc_title), desc: x.descriptif_du_projet,
-      links: [["Avis AE", x.dc_relation_expertise_avisae], ["Étude d'impact", x.dc_relation_expertise_etudeimpact], ["Résumé non technique", x.dc_relation_synthesis], ["Décision", x.dc_relation_decision], ["Page préfecture", x.dc_relation_informationnote || x.dc_relation_websitedebate]].filter((l) => l[1] && /^https?:/.test(l[1])),
-    }));
-    const locals = [...state.localProj, ...state.importedProj].filter((p) => haversine(site, p) <= pr.radius * 1000);
-    state.projects = [...locals, ...projs].map((p) => ({ ...p, d: haversine(site, p) })).sort((a, b) => a.d - b.d);
-    drawProjects();
-    const n1 = projs.length, n2 = locals.length;
-    $("#projSummary").innerHTML = err
-      ? `Projets-environnement.gouv.fr n'a pas répondu (${esc(err)}). ${n2 ? n2 + " projet(s) ajouté(s) affiché(s)." : ""}`
-      : `${n1} projet${n1 > 1 ? "s" : ""} PV publié${n1 > 1 ? "s" : ""} sur projets-environnement.gouv.fr${n2 ? ` et ${n2} projet${n2 > 1 ? "s" : ""} ajouté${n2 > 1 ? "s" : ""}` : ""} dans un rayon de ${pr.radius} km.`;
+      const j = await fetch(API_PROJ + "?" + new URLSearchParams({ where, select: sel, limit: "100", order_by: "dc_date desc" })).then((r) => r.json());
+      state.live = (j.results || []).filter((x) => x.geo_point_2d).map((x) => {
+        const t = typesOf([x.dc_title, x.descriptif_du_projet, x.dc_subject_category].flat().join(" "));
+        return projOf({ kind: "pe", id: "pe:" + x.recordsid, n: x.dc_title, t, mw: mwOf(x.descriptif_du_projet) ?? mwOf(x.dc_title),
+          lat: x.geo_point_2d.lat, lon: x.geo_point_2d.lon, dep: (x.dc_location || "").slice(0, 2), d: (x.dc_date || "").slice(0, 10),
+          st: x.vp_status === "ouvert" ? "Consultation du public en cours" : x.dc_relation_decision ? "Décision publiée" : x.dc_relation_expertise_avisae ? "Avis AE publié" : "Dossier publié",
+          pr: [].concat(x.dc_type || []).join(", "), src: ["PE"],
+          l: [["Avis AE", x.dc_relation_expertise_avisae], ["Résumé non technique", x.dc_relation_synthesis], ["Décision", x.dc_relation_decision], ["Page préfecture", x.dc_relation_informationnote || x.dc_relation_websitedebate]].filter((l) => l[1] && /^https?:/.test(l[1])) });
+      }).filter((p) => p.t.length);
+    } catch (e) { state.liveErr = e.message || String(e); }
+    refreshProjects();
   }
-  function projPopup(p) {
-    return `<h3>${esc(p.title)}</h3><div class="pm">${esc(p.proc || "")}${p.dep ? " · " + esc(p.dep) : ""}</div>
-      <div><b>${esc(p.statut || "")}</b>${p.date ? " · " + esc(p.date) : ""}${p.puissance ? " · " + esc(p.puissance) : ""}</div>
-      ${p.desc ? `<div class="pm">${esc(String(p.desc).slice(0, 260))}${String(p.desc).length > 260 ? "…" : ""}</div>` : ""}
-      <div>${(p.links || []).map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(" · ")}</div>`;
+
+  function refreshProjects() {
+    if (!state.site) return;
+    const pr = params(), A = projArea(), selKey = A.sel ? keyOf(A.sel.p) : null;
+    const types = ["pv", "eol", "bess"].filter((t) => $("#t_" + t).checked);
+    const withUnknown = $("#projUnknown").checked;
+    const cut = new Date(); cut.setFullYear(cut.getFullYear() - 5); const cutoff = cut.toISOString().slice(0, 10);
+    if (!state.collected.length) liveFallback(A);
+    const pool = [...(state.collected.length ? state.collected : state.live || []), ...state.localProj, ...state.importedProj];
+    state.projects = [];
+    for (const p of pool) {
+      if (p.mw !== null && p.mw < 1) continue;
+      if (p.mw === null && !withUnknown) continue;
+      if (!p.t.some((t) => types.includes(t)) && p.t.length) continue;
+      if (pr.projYears && (p.kind === "collecte" || p.kind === "pe") && p.d && p.d < cutoff) continue;
+      const dS = haversine(state.site, p), dP = A.sel ? haversine(A.sel.p, p) : Infinity;
+      if (Math.min(dS, dP) > A.R) continue;
+      const same = !!selKey && p.rac.some((r) => r.k === selKey);
+      state.projects.push({ ...p, d0: dS, dP, same });
+    }
+    state.projects.sort((a, b) => (b.same - a.same) || (Math.min(a.d0, a.dP) - Math.min(b.d0, b.dP)));
+    state.projects.forEach((p, i) => (p.label = "P" + (i + 1)));
+    drawProjects(A);
   }
-  function drawProjects() {
-    lyrProj.clearLayers();
+  // compat : appelé par analyse()
+  const loadProjects = () => refreshProjects();
+
+  const fmtMW = (p) => (p.mw !== null && p.mw !== undefined ? `${fmt(p.mw, p.mw < 10 ? 1 : 0)} MW` : "puissance non renseignée") + (p.mwh ? ` / ${fmt(p.mwh, 0)} MWh` : "");
+  function racHtml(p, selKey) {
+    if (!p.rac.length) return p.raw && p.raw.length ? `<div class="rac">Poste cité, absent de Capareseau : ${esc(p.raw.join(", "))}</div>` : `<div class="rac pm">Poste de raccordement non indiqué dans les documents lus</div>`;
+    return `<div class="rac">Raccordement envisagé : ${p.rac.map((r, i) => `<b class="${r.k === selKey ? "hit" : ""}">${esc(r.n)}</b>${r.km ? ` (${fmt(r.km, 0)} km)` : ""}${p.rac.length > 1 && i === 0 ? "" : ""}`).join(p.rac.length > 1 ? " ou " : "")}${p.rac.length > 1 ? " (options)" : ""}</div>`;
+  }
+  function projTip(p, selKey) {
+    const ty = p.t.map((t) => `<span class="tchip t-${t}">${TYPES[t]}</span>`).join("");
+    return `<div class="ptip-in${p.same ? " same" : ""}">
+      ${p.same ? `<div class="flag">Raccordement envisagé sur le poste étudié</div>` : ""}
+      <div class="pt">${esc(p.n)}</div>
+      <div>${ty} <b>${fmtMW(p)}</b>${p.com ? " · " + esc(p.com) : ""}${p.dep ? ` (${esc(p.dep)})` : ""}</div>
+      <div class="pm">${esc(p.st || "")}${p.d ? " · " + esc(new Date(p.d).toLocaleDateString("fr-FR")) : ""}${p.pr && !String(p.st).includes(p.pr) ? " · " + esc(p.pr) : ""}</div>
+      ${racHtml(p, selKey)}
+      ${p.x ? `<div class="x">${esc(p.x.slice(0, 260))}</div>` : ""}
+      <div class="pm">${km(p.d0)} du site${Number.isFinite(p.dP) ? ` · ${km(p.dP)} du poste étudié` : ""}${p.geo === "c" ? " · position approximative (centre de la commune)" : ""}${p.src.length ? " · " + esc(p.src.join(", ")) : ""}</div>
+    </div>`;
+  }
+  function projPopup(p, selKey) {
+    return projTip(p, selKey) + `<div class="plinks">${(p.l || []).map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(" · ")}</div>`;
+  }
+  function drawProjects(A) {
+    lyrProj.clearLayers(); lyrRadius.clearLayers();
+    for (const ring of unionRings(A.centers, A.R))
+      L.polygon(ring, { color: css("--proj"), weight: 1.4, dashArray: "5 6", fillColor: css("--proj"), fillOpacity: 0.04, interactive: false }).addTo(lyrRadius);
+    const selKey = A.sel ? keyOf(A.sel.p) : null;
     const ul = $("#projList"); ul.innerHTML = "";
-    state.projects.forEach((p) => {
-      const loc = p.kind !== "pe";
-      if (p.geom) L.geoJSON(p.geom, { style: { color: css("--proj"), weight: 1.5, fillOpacity: 0.12 }, interactive: false }).addTo(lyrProj);
-      const m = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html: `<div class="pin-proj${loc ? " loc" : ""}"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }) })
-        .bindPopup(projPopup(p)).addTo(lyrProj);
+    const same = state.projects.filter((p) => p.same);
+    // les projets sur le poste étudié sont dessinés en dernier (au-dessus)
+    for (const p of [...state.projects].reverse()) {
+      const t0 = p.t[0] || "pv", man = p.kind === "local" || p.kind === "import";
+      if (p.same) L.polyline([[p.lat, p.lon], [A.sel.p.lat, A.sel.p.lon]], { color: css("--accent"), weight: 2, dashArray: "2 6", opacity: 0.9, interactive: false }).addTo(lyrProj);
+      const sz = p.same ? 20 : 13;
+      L.marker([p.lat, p.lon], {
+        icon: L.divIcon({ className: "", html: `<div class="pin-p t-${t0}${p.same ? " same" : ""}${man ? " man" : ""}${p.geo === "c" ? " approx" : ""}"><span>${p.same ? "⚡" : ""}</span></div>`, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
+        zIndexOffset: p.same ? 400 : 0, keyboard: false,
+      }).bindTooltip(projTip(p, selKey), { direction: "top", offset: [0, -sz / 2], className: "ptip", opacity: 1 })
+        .bindPopup(projPopup(p, selKey), { maxWidth: 340 }).addTo(lyrProj);
+    }
+    state.projects.slice(0, 80).forEach((p) => {
       const li = document.createElement("li");
-      li.className = "proj" + (loc ? " loc" : "");
-      li.innerHTML = `<div class="pt">${esc(p.title)}</div><div class="pm">${esc(p.statut || "")}${p.date ? " · " + esc(p.date) : ""}${p.puissance ? " · " + esc(p.puissance) : ""} · ${km(p.d)}</div>`;
-      li.addEventListener("click", () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 13)); m.openPopup(); });
+      li.className = "proj t-" + (p.t[0] || "pv") + (p.same ? " same" : "") + (p.kind === "local" || p.kind === "import" ? " loc" : "");
+      li.innerHTML = `<div class="pt">${esc(p.label)} · ${esc(p.n)}</div>
+        <div class="pm">${p.t.map((t) => TYPES[t]).join(" + ")} · ${fmtMW(p)} · ${esc(p.st || p.pr || "")}${p.d ? " · " + esc(p.d.slice(0, 7)) : ""} · ${km(Math.min(p.d0, p.dP))}</div>
+        ${p.rac.length ? `<div class="pm">→ ${p.rac.map((r) => (r.k === selKey ? `<b>${esc(r.n)}</b>` : esc(r.n))).join(" ou ")}</div>` : ""}`;
+      li.addEventListener("click", () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 12)); lyrProj.eachLayer((l) => { if (l.getLatLng && l.getLatLng().lat === p.lat && l.getLatLng().lng === p.lon) l.openPopup(); }); });
       ul.appendChild(li);
     });
+    // bilan
+    const pr = params(), n = state.projects.length, byT = (t) => state.projects.filter((p) => p.t.includes(t)).length;
+    const sumSame = same.reduce((a, p) => a + (p.mw || 0), 0), unk = same.filter((p) => p.mw === null).length;
+    const cap = A.sel ? capOf(A.sel.p) : null;
+    const meta = state.projMeta;
+    $("#projSummary").innerHTML = `
+      <p>${n} projet${n > 1 ? "s" : ""} (PV ${byT("pv")}, éolien ${byT("eol")}, stockage ${byT("bess")}) dans un rayon de ${fmt(pr.radius, 0)} km autour du site${A.sel ? ` et du poste n° ${state.sel + 1} ${esc(A.sel.p.n)}` : ""}.${n > 80 ? " Liste limitée aux 80 plus proches." : ""}</p>
+      ${A.sel ? `<p class="${same.length ? "samebox" : ""}">${same.length
+        ? `<b>${same.length} projet${same.length > 1 ? "s" : ""} envisage${same.length > 1 ? "nt" : ""} un raccordement sur ${esc(A.sel.p.n)}</b> : ${fmt(sumSame, 1)} MW${unk ? ` + ${unk} de puissance non renseignée` : ""}, pour ${fmt(cap)} MW de capacité réservée restante.`
+        : `Aucun projet du rayon ne cite ${esc(A.sel.p.n)} comme poste de raccordement dans les documents lus.`}</p>` : ""}
+      ${meta ? "" : state.liveErr ? `<p class="notice">Collecte indisponible et projets-environnement.gouv.fr injoignable (${esc(state.liveErr)}).</p>` : `<p class="pm">Collecte hebdomadaire pas encore disponible : projets lus en direct sur projets-environnement.gouv.fr, sans poste de raccordement.</p>`}`;
   }
 
-  /* projets ajoutés à la main : data/projets-locaux.geojson + import de fichiers */
+  /* projets ajoutés à la main : data/projets-locaux.geojson + import de fichiers
+   * propriétés lues : nom, type (pv / éolien / stockage), puissance_mw (ou puissance_mwc), procedure, statut, date,
+   * commune, poste_raccordement (nom du poste, ou « région:code »), source (URL), commentaire */
   function featureToProj(f, kind) {
     const g = f.geometry; if (!g) return null;
     let lat, lon;
     if (g.type === "Point") [lon, lat] = g.coordinates;
     else { const b = L.geoJSON(f).getBounds(); if (!b.isValid()) return null; ({ lat, lng: lon } = b.getCenter()); }
     const pp = f.properties || {};
-    return { kind, title: pp.nom || pp.name || pp.titre || "Projet", lat, lon, geom: g.type === "Point" ? null : g,
-      proc: pp.procedure || "", statut: pp.statut || "", date: pp.date || "", dep: pp.commune || "",
-      puissance: pp.puissance_mwc ? pp.puissance_mwc + " MWc" : null, desc: pp.commentaire || "",
-      links: pp.source && /^https?:/.test(pp.source) ? [["Source", pp.source]] : [] };
+    const t = typesOf(pp.type || "") .length ? typesOf(pp.type) : /eol|éol/i.test(pp.type || "") ? ["eol"] : /stock|bess|batt/i.test(pp.type || "") ? ["bess"] : typesOf((pp.nom || "") + " " + (pp.commentaire || "")).length ? typesOf((pp.nom || "") + " " + (pp.commentaire || "")) : ["pv"];
+    const mw = num(pp.puissance_mw ?? pp.puissance_mwc ?? pp.puissance);
+    return projOf({ kind, id: kind + ":" + (pp.nom || lat + "," + lon), n: pp.nom || pp.name || pp.titre || "Projet", t, mw, lat, lon, geo: "p",
+      com: pp.commune || null, d: pp.date || "", st: pp.statut || "", pr: pp.procedure || "", src: [kind === "local" ? "Projets ajoutés" : "Import"],
+      l: pp.source && /^https?:/.test(pp.source) ? [["Source", pp.source]] : [], x: pp.commentaire || null,
+      rac: pp.poste_raccordement ? postesFromText(pp.poste_raccordement, lat, lon) : [] });
   }
   function parseCsv(text) {
     const lines = text.split(/\r?\n/).filter((l) => l.trim());
@@ -523,7 +642,7 @@
       const feats = /\.csv$/i.test(file.name) ? parseCsv(text) : (JSON.parse(text).features || []);
       state.importedProj = feats.map((f) => featureToProj(f, "import")).filter(Boolean);
       $("#projSummary").textContent = `${state.importedProj.length} projet(s) importé(s) depuis ${file.name}.`;
-      if (state.site) loadProjects();
+      if (state.site) refreshProjects();
     } catch (err) { $("#projSummary").textContent = `Import impossible : ${err.message}. Attendu : GeoJSON, ou CSV avec colonnes lat et lon.`; }
     e.target.value = "";
   });
@@ -565,6 +684,7 @@
   /* ---------- paramètres & export ---------- */
   ["#p", "#n", "#minCap", "#withCap", "#withRte"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (s === "#p") drawAllPostes(); analyse(false); }));
   $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
+  ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
   ["#cMl", "#cMl2", "#pSeuil", "#pDep", "#cCell", "#cPdl", "#kDet"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
   $("#copyCorr").addEventListener("click", async () => {
@@ -606,6 +726,14 @@
     mergeCorr(state.corrRepo);
     mergeCorr(loadLocalCorr());
     try {
+      const [pj, pm] = await Promise.all([
+        fetch("data/projets.json").then((r) => (r.ok ? r.json() : [])).catch(() => []),
+        fetch("data/projets-meta.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      state.collected = (Array.isArray(pj) ? pj : []).map((p) => projOf({ ...p, kind: "collecte", id: "c:" + p.id, rac: p.rac || [], l: p.l || [], src: p.src || [] }));
+      state.projMeta = state.collected.length ? pm : null;
+    } catch (_) {}
+    try {
       const gj = await fetch("data/projets-locaux.geojson").then((r) => (r.ok ? r.json() : null));
       state.localProj = (gj?.features || []).map((f) => featureToProj(f, "local")).filter(Boolean);
     } catch (_) {}
@@ -613,6 +741,7 @@
     const m = state.meta;
     const regs = m ? Object.values(m.regions).map((r) => r.maj_max).filter(Boolean).sort() : [];
     $("#meta").innerHTML = `<p>${m ? m.nb_postes.toLocaleString("fr-FR") : state.postes.length} postes · extraction Capareseau du ${m ? new Date(m.extraction).toLocaleDateString("fr-FR") : "—"}${regs.length ? ` (données régionales mises à jour entre le ${new Date(regs[0]).toLocaleDateString("fr-FR")} et le ${new Date(regs[regs.length - 1]).toLocaleDateString("fr-FR")})` : ""}. Corse et outre-mer non couverts par les S3REnR.${Object.keys(state.corrRepo).length ? ` ${Object.keys(state.corrRepo).length} position(s) de poste corrigée(s) dans le dépôt.` : ""}</p>
+      ${state.projMeta ? `<p>Projets voisins : collecte du ${new Date(state.projMeta.collecte).toLocaleDateString("fr-FR")} (${state.collected.length.toLocaleString("fr-FR")} projets PV, éolien et stockage depuis ${new Date(state.projMeta.depuis).getFullYear()} ; sources : projets-environnement.gouv.fr, avis MRAe, sites des préfectures). Le poste de raccordement provient des documents lus (avis, résumé non technique, avis d'enquête).</p>` : ""}
       ${state.corrError ? `<p class="notice">Le fichier data/postes-corrections.json du dépôt est illisible (${esc(state.corrError)}) : ses positions corrigées ne sont pas appliquées. Vérifiez les virgules et les accolades.</p>` : ""}
       <p>Sources : <a href="https://www.capareseau.fr/" target="_blank" rel="noopener">Capareseau</a> (RTE, GRD), <a href="https://www.projets-environnement.gouv.fr/" target="_blank" rel="noopener">projets-environnement.gouv.fr</a>, itinéraires <a href="https://geoservices.ign.fr/" target="_blank" rel="noopener">IGN Géoplateforme</a> (secours OSRM/OSM). Les capacités évoluent en continu : seule une demande de raccordement (PTF) engage le gestionnaire de réseau.</p>`;
     const site = readHash();
