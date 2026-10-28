@@ -387,7 +387,7 @@ def commune_dep_from(text):
 PE_API = "https://www.projets-environnement.gouv.fr/api/explore/v2.1/catalog/datasets/projets-environnement-diffusion"
 
 
-def src_pe():
+def src_pe(geo):
     sel = ",".join(["dc_title", "descriptif_du_projet", "dc_subject_category", "dc_subject_theme", "dc_type", "vp_status", "dc_date", "dateouverture", "datefermeture",
                     "dc_location", "geo_point_2d", "dc_relation_decision", "dc_relation_expertise_avisae", "dc_relation_synthesis", "dc_relation_informationnote",
                     "dc_relation_websitedebate", "dc_relation_expertise_etudeimpact", "recordsid", "location_ville", "codepostal"])
@@ -398,17 +398,37 @@ def src_pe():
     for x in rows:
         cat = " ".join(x.get("dc_subject_category") or []) + " " + " ".join(x.get("dc_subject_theme") or [])
         ty = types_of(x.get("dc_title"), x.get("descriptif_du_projet"), cat)
-        g = x.get("geo_point_2d")
-        if not ty or not g or not in_metro(g.get("lat"), g.get("lon")):
+        if not ty:
             continue
         dep = (re.match(r"\s*(\d{2}|2A|2B)", x.get("dc_location") or "") or [None, None])[1]
+        g = x.get("geo_point_2d")
+        lat = lon = None
+        gq, com, insee = "p", None, None
+        if g and in_metro(g.get("lat"), g.get("lon")):
+            lat, lon = g["lat"], g["lon"]
+        elif dep:
+            # deux dossiers sur trois n'ont pas de coordonnées : commune déclarée, code postal, ou commune citée
+            c = None
+            if x.get("location_ville"):
+                c = geo.commune(str(x["location_ville"]).split(",")[0], dep)
+            if not c and x.get("codepostal") and re.fullmatch(r"\d{5}", str(x["codepostal"]).strip()):
+                c = geo.postcode(str(x["codepostal"]).strip())
+            if not c:
+                cd = commune_dep_from(f'{x.get("dc_title") or ""} . {x.get("descriptif_du_projet") or ""}')
+                c = geo.commune(*cd) if cd and cd[1] == dep else None
+            if not c:
+                c = geo.find_in_text(x.get("dc_title") or "", dep) or geo.find_in_text((x.get("descriptif_du_projet") or "")[:800], dep)
+            if c:
+                lat, lon, insee, com, gq = c[0], c[1], c[2], c[3], "c"
+        if not in_metro(lat, lon):
+            continue
         st = "Consultation du public en cours" if x.get("vp_status") == "ouvert" else ("Décision publiée" if x.get("dc_relation_decision") else ("Avis AE publié" if x.get("dc_relation_expertise_avisae") else "Dossier publié"))
         docs = [("Avis de l'autorité environnementale", x.get("dc_relation_expertise_avisae")), ("Résumé non technique", x.get("dc_relation_synthesis"))]
         links = [("Avis AE", x.get("dc_relation_expertise_avisae")), ("Résumé non technique", x.get("dc_relation_synthesis")), ("Décision", x.get("dc_relation_decision")),
                  ("Page préfecture", x.get("dc_relation_informationnote") or x.get("dc_relation_websitedebate"))]
         out.append({
             "src": "PE", "id": f"pe:{x.get('recordsid')}", "n": (x.get("dc_title") or "").strip(), "t": ty,
-            "desc": x.get("descriptif_du_projet") or "", "lat": g["lat"], "lon": g["lon"], "geo": "p", "dep": dep,
+            "desc": x.get("descriptif_du_projet") or "", "lat": lat, "lon": lon, "geo": gq, "dep": dep, "com": com, "insee": insee,
             "d": (x.get("dc_date") or "")[:10], "st": st, "pr": ", ".join(x.get("dc_type") or []),
             "docs": [(l, u) for l, u in docs if u and u.startswith("http")],
             "links": [(l, u) for l, u in links if u and u.startswith("http")],
@@ -851,7 +871,7 @@ def main():
     meta = {"collecte": TODAY.isoformat(), "depuis": CUTOFF.isoformat(), "sources": {}}
 
     projects = []
-    for name, fn in [("pe", lambda: src_pe()), ("novae", lambda: src_novae(geo, cache)), ("mrae", lambda: src_mrae(geo))]:
+    for name, fn in [("pe", lambda: src_pe(geo)), ("novae", lambda: src_novae(geo, cache)), ("mrae", lambda: src_mrae(geo))]:
         if name in only:
             try:
                 r = fn()
