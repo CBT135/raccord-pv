@@ -37,11 +37,12 @@ jobs:
           pip install -q beautifulsoup4==4.12.3
       - name: Collecte
         run: |
+          set -o pipefail
           python3 scripts/collect_projets.py \
             --only "${{ inputs.only || 'pe,novae,mrae,pref' }}" \
             --depts "${{ inputs.depts }}" \
             --max-docs "${{ inputs.max_docs || '2500' }}" \
-            --budget-min 240
+            --budget-min 240 2>&1 | tee collecte.log
       - name: Bilan
         if: always()
         run: cat data/projets-meta.json || true
@@ -54,12 +55,16 @@ jobs:
           if git diff --cached --quiet; then echo "Aucun changement."; exit 0; fi
           git commit -q -m "Projets voisins : collecte du $(date -u +%Y-%m-%d)"
           git pull -q --rebase && git push -q
-      - name: Résultat d'essai
-        if: ${{ inputs.depts != '' || (inputs.only != '' && inputs.only != 'pe,novae,mrae,pref') }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: essai-projets
-          path: |
-            data/projets.json
-            data/projets-meta.json
-            data/projets-cache.json
+      - name: Journal (branche collecte-journal)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/journal && cp collecte.log /tmp/journal/ 2>/dev/null || true
+          cp data/projets.json data/projets-meta.json /tmp/journal/ 2>/dev/null || true
+          cd /tmp/journal && git init -q && git checkout -q -b collecte-journal
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "Run ${{ github.run_id }} – $(date -u +%F\ %T) – only=${{ inputs.only }} depts=${{ inputs.depts }}" > LISEZMOI.txt
+          git add -A && git commit -q -m "Journal de collecte ${{ github.run_id }}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" collecte-journal
