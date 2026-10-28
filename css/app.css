@@ -65,6 +65,10 @@ h2 { font: 600 17px/1.2 var(--f-display); letter-spacing: .03em; text-transform:
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
 .grid2 label { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
 .grid2 input, .grid2 select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); font-family: var(--f-mono); font-size: 13.5px; }
+.grid2 .full { grid-column: 1 / -1; }
+.grid2 input[type="text"] { font-family: var(--f-body); font-size: 14px; }
+.links .rep { font-weight: 500; }
+.links .rep:disabled { opacity: .6; cursor: progress; }
 .unit { font-family: var(--f-mono); font-size: 11px; }
 .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
 .check input { margin-top: 3px; accent-color: var(--accent); }

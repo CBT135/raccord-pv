@@ -12,7 +12,7 @@
   const PV_RE = /photovolta|solaire|agrivolta|\bPV\b|ombri[eè]re/i;
 
   const state = { postes: [], meta: null, site: null, results: [], sel: 0, localProj: [], importedProj: [], projects: [], routeSeq: 0,
-    corr: {}, corrRepo: {}, lastDrag: 0 };
+    corr: {}, corrRepo: {}, lastDrag: 0, corrError: null, reporting: null };
   const LS_CORR = "raccordpv.positions"; // positions corrigées dans ce navigateur
 
   /* ---------- utilitaires ---------- */
@@ -152,18 +152,19 @@
    * #45.61000,5.15000&p=10&n=5&min=0&r=20&cap=1&rte=0&y=1&ml=160&dep=12&cell=120&pdl=90&k=1.3
    * Le site est facultatif ; les anciens liens « #lat,lon » restent valides. */
   const URL_FIELDS = [
-    ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
+    ["nom", "#nom"], ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
     ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"],
     ["ml", "#cMl"], ["ml2", "#cMl2"], ["seuil", "#pSeuil"], ["dep", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"],
   ];
   const COST_KEYS = ["ml", "ml2", "seuil", "dep", "cell", "pdl", "k"];
   const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
+  function setTitle() { const n = $("#nom").value.trim(); document.title = n ? `${n} · Raccord PV` : "Raccord PV"; }
   function writeHash() {
     const parts = [];
     if (state.site) parts.push(`${state.site.lat.toFixed(5)},${state.site.lon.toFixed(5)}`);
     for (const [k, s] of URL_FIELDS) {
       const el = $(s);
-      const v = el.type === "checkbox" ? (el.checked ? "1" : "0") : String(el.value).trim().replace(",", ".");
+      const v = el.type === "checkbox" ? (el.checked ? "1" : "0") : el.type === "text" ? el.value.trim() : String(el.value).trim().replace(",", ".");
       if (v !== "") parts.push(`${k}=${encodeURIComponent(v)}`);
     }
     // positions corrigées des postes affichés, pour qu'un lien partagé donne les mêmes distances
@@ -198,10 +199,12 @@
       const el = $(f[1]);
       if (el.type === "checkbox") el.checked = raw === "1" || raw === "true";
       else if (el.tagName === "SELECT") { if ([...el.options].some((o) => o.value === raw)) el.value = raw; }
+      else if (el.type === "text") el.value = raw.slice(0, 120);
       else if (Number.isFinite(num(raw))) el.value = num(raw);
       if (COST_KEYS.includes(k) && String(num(raw)) !== String(num(DEFAULTS[k]))) costChanged = true;
     }
     if (costChanged) $(".hyp").open = true; // montre que des hypothèses non standard sont appliquées
+    setTitle();
     return site;
   }
 
@@ -306,8 +309,9 @@
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
           <div class="row"><span>+ poste de livraison</span><b>${keur(c.total)}</b></div>
         </div>
-        <div class="links"><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a>${p.moved ? `<button type="button" class="linkbtn reset">Rétablir la position Capareseau</button>` : ""}<span class="pm">màj ${esc(p.up || "—")}</span></div>`;
+        <div class="links"><button type="button" class="ghost rep"${state.reporting !== null ? " disabled" : ""}>${state.reporting === idx ? "Rapport en cours…" : "Rapport PDF"}</button><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a>${p.moved ? `<button type="button" class="linkbtn reset">Rétablir la position Capareseau</button>` : ""}<span class="pm">màj ${esc(p.up || "—")}</span></div>`;
       li.querySelector(".reset")?.addEventListener("click", (e) => { e.stopPropagation(); setPosteLatLng(p, null); });
+      li.querySelector(".rep").addEventListener("click", (e) => { e.stopPropagation(); report(idx, e.currentTarget); });
       li.addEventListener("click", (e) => { if (e.target.closest("a, button")) return; select(idx); });
       li.addEventListener("keydown", (e) => { if (e.key === "Enter") select(idx); });
       ol.appendChild(li);
@@ -321,6 +325,38 @@
     $("#copy").hidden = false;
     $("#dragHint").hidden = false;
   }
+  /* ---------- rapport PDF ---------- */
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function reportData(idx) {
+    const pr = params();
+    const baseName = Object.keys(base).find((k) => map.hasLayer(base[k])) || "Plan IGN";
+    return {
+      nom: $("#nom").value.trim(), p: pr.p, pr, site: { ...state.site }, sel: idx,
+      base: baseName.startsWith("Photo") ? "ortho" : baseName === "OpenStreetMap" ? "osm" : "plan",
+      postes: state.results.map((r) => {
+        const p = r.p, cap = capOf(p);
+        return { nom: p.n, code: p.c, r: p.r, grd: [p.g1 || "RTE", p.g2].filter(Boolean).join(" / "), ht: p.ht, pj: p.pj, up: p.up, moved: !!p.moved,
+          lat: p.lat, lon: p.lon, v: p.v, cap, cls: capClass(cap, pr.p), d: r.d, route: r.route, routeSrc: r.routeSrc, routeGeom: r.routeGeom, cost: costFor(r, pr) };
+      }),
+      projets: state.projects.map((x, i) => ({ label: "P" + (i + 1), kind: x.kind, title: x.title, statut: x.statut, date: x.date, puissance: x.puissance, d: x.d, lat: x.lat, lon: x.lon })),
+      regionNom: (code) => state.meta?.regions?.[code]?.nom || code,
+      extraction: state.meta ? new Date(state.meta.extraction).toLocaleDateString("fr-FR") : null,
+      url: location.href,
+    };
+  }
+  async function report(idx, btn) {
+    if (state.reporting !== null || !window.RaccordReport) return;
+    state.reporting = idx; refreshResults();
+    let msg = null;
+    try {
+      const r = state.results[idx], t0 = Date.now();
+      while (r && r.routeSrc === null && Date.now() - t0 < 10000) await sleep(250); // laisse finir le calcul d'itinéraire
+      await window.RaccordReport.generate(reportData(state.results.indexOf(r)));
+    } catch (e) { msg = `Rapport impossible : ${e.message || e}`; }
+    state.reporting = null; refreshResults();
+    if (msg) { const b = document.querySelectorAll("#list .poste .rep")[idx]; if (b) { b.textContent = msg; setTimeout(refreshResults, 5000); } }
+  }
+
   function refreshResults() {
     if (!state.site) return;
     renderList(nearest(state.site, params().p).firstFull);
@@ -528,6 +564,7 @@
 
   /* ---------- paramètres & export ---------- */
   ["#p", "#n", "#minCap", "#withCap", "#withRte"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (s === "#p") drawAllPostes(); analyse(false); }));
+  $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
   ["#cMl", "#cMl2", "#pSeuil", "#pDep", "#cCell", "#cPdl", "#kDet"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
   $("#copyCorr").addEventListener("click", async () => {
@@ -559,7 +596,11 @@
       return;
     }
     try {
-      const cj = await fetch("data/postes-corrections.json").then((r) => (r.ok ? r.json() : {}));
+      const cj = await fetch("data/postes-corrections.json").then(async (r) => {
+        if (!r.ok) return {};
+        const txt = await r.text();
+        try { return JSON.parse(txt); } catch (e) { state.corrError = e.message; return {}; }
+      });
       for (const [k, v] of Object.entries(cj || {})) if (v && Number.isFinite(+v.lat) && Number.isFinite(+v.lon)) state.corrRepo[k] = { lat: +(+v.lat).toFixed(6), lon: +(+v.lon).toFixed(6), n: v.n };
     } catch (_) {}
     mergeCorr(state.corrRepo);
@@ -572,6 +613,7 @@
     const m = state.meta;
     const regs = m ? Object.values(m.regions).map((r) => r.maj_max).filter(Boolean).sort() : [];
     $("#meta").innerHTML = `<p>${m ? m.nb_postes.toLocaleString("fr-FR") : state.postes.length} postes · extraction Capareseau du ${m ? new Date(m.extraction).toLocaleDateString("fr-FR") : "—"}${regs.length ? ` (données régionales mises à jour entre le ${new Date(regs[0]).toLocaleDateString("fr-FR")} et le ${new Date(regs[regs.length - 1]).toLocaleDateString("fr-FR")})` : ""}. Corse et outre-mer non couverts par les S3REnR.${Object.keys(state.corrRepo).length ? ` ${Object.keys(state.corrRepo).length} position(s) de poste corrigée(s) dans le dépôt.` : ""}</p>
+      ${state.corrError ? `<p class="notice">Le fichier data/postes-corrections.json du dépôt est illisible (${esc(state.corrError)}) : ses positions corrigées ne sont pas appliquées. Vérifiez les virgules et les accolades.</p>` : ""}
       <p>Sources : <a href="https://www.capareseau.fr/" target="_blank" rel="noopener">Capareseau</a> (RTE, GRD), <a href="https://www.projets-environnement.gouv.fr/" target="_blank" rel="noopener">projets-environnement.gouv.fr</a>, itinéraires <a href="https://geoservices.ign.fr/" target="_blank" rel="noopener">IGN Géoplateforme</a> (secours OSRM/OSM). Les capacités évoluent en continu : seule une demande de raccordement (PTF) engage le gestionnaire de réseau.</p>`;
     const site = readHash();
     applyCorrections();

@@ -11,6 +11,20 @@ Outil cartographique de pré-étude de raccordement d'un projet photovoltaïque 
 
 Le bouton « Copier le tableau » met les résultats dans le presse-papiers au format tableur.
 
+## Rapport PDF
+
+Renseigner le **nom du projet** (en haut du panneau ; il est gardé dans le lien), puis cliquer sur **Rapport PDF** dans la fiche d'un poste. Le PDF (A4, 2 pages en général) est généré dans le navigateur et téléchargé directement. Il contient :
+
+- le nom du projet, la commune et les coordonnées du site ;
+- un extrait de carte (fond affiché à l'écran : Plan IGN, photographies aériennes ou OSM) avec le site, les postes affichés, le trajet du poste étudié et les projets PV proches ;
+- les caractéristiques du projet et les hypothèses de coût ;
+- l'estimation du coût de raccordement du poste étudié (distances, quote-part, liaison HTA, cellules, poste de livraison) ;
+- les informations Capareseau du poste (capacités, remplissage, file d'attente, quote-part, travaux, date de mise à jour, position corrigée ou non) ;
+- le tableau récapitulatif des postes affichés et la liste des projets PV du rayon ;
+- les sources, les limites et un lien vers l'analyse en ligne.
+
+Les bibliothèques PDF (jsPDF, jsPDF-AutoTable) ne sont chargées qu'au premier rapport.
+
 ## Corriger la position d'un poste
 
 Les coordonnées publiées par Capareseau sont approximatives. Les postes numérotés se déplacent à la souris (fond « Photographies aériennes » conseillé) ; la distance, le trajet piéton et le coût sont recalculés, et la liste est reclassée par distance. « Rétablir la position Capareseau » annule la correction.
@@ -33,6 +47,7 @@ L'adresse de la page enregistre le site et tous les réglages ; copier l'URL suf
 
 | Clé | Réglage | Clé | Réglage |
 |---|---|---|---|
+| `nom` | nom du projet | | |
 | `lat,lon` | position du site (facultative) | `ml` | liaison HTA jusqu'au seuil (€/m) |
 | `seuil` | seuil de puissance d'injection (MW) | `ml2` | liaison HTA au-delà du seuil (€/m) |
 | `p` | puissance d'injection (MW) | `dep` | puissance max par départ HTA (MW) |
