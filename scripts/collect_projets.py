@@ -25,7 +25,7 @@ from bs4 import BeautifulSoup
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
-UA = "Mozilla/5.0 (compatible; raccord-pv/1.0; +https://github.com/cbt135/raccord-pv)"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 raccord-pv/1.0"
 TODAY = dt.date.today()
 CUTOFF = TODAY.replace(year=TODAY.year - 6)
 MAX_PDF = 25 * 1024 * 1024
@@ -47,15 +47,29 @@ def fix_url(u):
 
 
 _host_locks = defaultdict(lambda: threading.Semaphore(3))
+_pref_lock = threading.Lock()   # les sites des préfectures partagent un hébergement : une requête à la fois, espacées
+_pref_last = [0.0]
+PREF_GAP = 2.5
+
+
+def _is_pref(host):
+    return host.endswith(".gouv.fr") and host.count(".") == 3 and host.startswith("www.") and host[4:-8] in PREF_DOMAINS.values()
 
 
 def http(url, binary=False, max_bytes=None, timeout=60, tries=3):
     url = fix_url(url)
     host = urllib.parse.urlsplit(url).netloc
     last = None
+    pref = _is_pref(host)
     for k in range(tries):
         try:
-            with _host_locks[host]:
+            if pref:
+                with _pref_lock:
+                    wait = _pref_last[0] + PREF_GAP - time.time()
+                    if wait > 0:
+                        time.sleep(wait)
+                    _pref_last[0] = time.time()
+            with (_pref_lock if pref else _host_locks[host]):
                 req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "fr"})
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     cl = r.headers.get("Content-Length")
@@ -75,7 +89,7 @@ def http(url, binary=False, max_bytes=None, timeout=60, tries=3):
             last = e
         except Exception as e:  # réseau, délai
             last = e
-        time.sleep(3 * (k + 1))
+        time.sleep((20 if pref else 3) * (k + 1))
     raise last
 
 
@@ -188,7 +202,7 @@ def power_of(text, prefer_context=True):
     m = re.search(NUM + r"\s*" + E_UNIT, t[:20000])
     if m:
         mwh = parse_num(m.group(1), m.group(2).replace("H", ""))
-    if mw is not None and not (0.01 <= mw <= 5000):
+    if mw is not None and not (0.01 <= mw <= 1200):
         mw = None
     return mw, mwh
 
@@ -620,7 +634,7 @@ PREF_DOMAINS = {
     "80": "somme", "81": "tarn", "82": "tarn-et-garonne", "83": "var", "84": "vaucluse", "85": "vendee", "86": "vienne", "87": "haute-vienne", "88": "vosges",
     "89": "yonne", "90": "territoire-de-belfort", "91": "essonne", "92": "hauts-de-seine", "93": "seine-saint-denis", "94": "val-de-marne", "95": "val-doise",
 }
-PREF_KEYWORDS = ["photovoltaïque", "agrivoltaïque", "éolien", "éoliennes", "centrale solaire", "stockage batteries"]
+PREF_KEYWORDS = ["photovoltaïque", "agrivoltaïque", "éolien", "stockage"]
 PROC_RE = re.compile(r"ENQUETE PUBLIQUE|PARTICIPATION DU PUBLIC|PARTICIPATION PAR VOIE ELECTRONIQUE|\bPPVE\b|CONSULTATION DU PUBLIC|AUTORISATION ENVIRONNEMENTALE|PERMIS DE CONSTRUIRE|AVIS D ENQUETE|DECLARATION DE PROJET|INSTALLATION CLASSEE|\bICPE\b|ETUDE D IMPACT|MISE A DISPOSITION")
 SKIP_URL = re.compile(r"Recueil-des-Actes|RAA|Communique|Salle-de-presse|Actualites|/contenu/telechargement/", re.I)
 DOC_RANK = [
@@ -645,25 +659,32 @@ def pref_proc(t):
     return "Publication préfecture"
 
 
-def src_pref(geo, cache, depts=None, deadline=None):
+def src_pref(geo, cache, depts=None, deadline=None, batch=16):
+    """Départements traités par lots (les plus anciennement parcourus d'abord) ; les résultats des autres
+    départements sont repris du cache. Un département en erreur garde ses résultats précédents."""
     pc = cache.setdefault("pref", {})
-    out, stats = [], {}
-    lock = threading.Lock()
-
-    def one(item):
-        dep, dom = item
+    scan = cache.setdefault("pref_scan", {})
+    res_by = cache.setdefault("pref_res", {})
+    stats = cache.setdefault("pref_stats", {})
+    if depts:
+        items = [(d, m) for d, m in PREF_DOMAINS.items() if d in depts]
+    else:
+        items = sorted(PREF_DOMAINS.items(), key=lambda dm: scan.get(dm[0], ""))[:batch]
+    log(f"Préfectures : {len(items)} départements ce passage ({', '.join(d for d, _ in items)})")
+    for dep, dom in items:
         if deadline and time.time() > deadline:
-            stats[dep] = {"reporte": "budget de temps atteint"}
-            return
+            log(f"  budget de temps atteint, {dep} reporté")
+            break
         res, st = pref_dept(geo, pc, dep, dom)
-        with lock:
-            out.extend(res)
-            stats[dep] = st
-
-    items = [(d, m) for d, m in PREF_DOMAINS.items() if not depts or d in depts]
-    with cf.ThreadPoolExecutor(8) as ex:
-        list(ex.map(one, items))
-    return out, stats
+        st["le"] = TODAY.isoformat()
+        stats[dep] = st
+        if "erreur" in st and not res:
+            continue  # site injoignable : on garde les résultats précédents et on réessaiera
+        res_by[dep] = res
+        scan[dep] = TODAY.isoformat()
+    out = [p for d in sorted(res_by) for p in res_by[d]]
+    log(f"Préfectures : {len(out)} projets au total ({len(res_by)} départements parcourus au moins une fois)")
+    return out, {d: stats.get(d) for d in PREF_DOMAINS}
 
 
 def pref_dept(geo, pc, dep, dom):
@@ -672,11 +693,11 @@ def pref_dept(geo, pc, dep, dom):
         base = f"https://www.{dom}.gouv.fr"
         cards, err = {}, None
         for kw in PREF_KEYWORDS:
-            for page in range(12):
+            for page in range(6):
                 u = f"{base}/content/search?SearchText={urllib.parse.quote(kw)}" if page == 0 else \
                     f"{base}/contenu/recherche/(offset)/{10 * page}?SearchText={urllib.parse.quote(kw)}&dateFilter[]="
                 try:
-                    soup = BeautifulSoup(http(u, timeout=45, tries=2), "html.parser")
+                    soup = BeautifulSoup(http(u, timeout=45, tries=3), "html.parser")
                 except Exception as e:
                     err = str(e)[:80]
                     break
@@ -710,7 +731,7 @@ def pref_dept(geo, pc, dep, dom):
             ent = pc.get(key)
             if not ent or ent.get("d") != d:
                 try:
-                    soup = BeautifulSoup(http(href, timeout=60, tries=2), "html.parser")
+                    soup = BeautifulSoup(http(href, timeout=60, tries=3), "html.parser")
                 except Exception as e:
                     log("  page préfecture illisible", href, e)
                     continue
@@ -894,6 +915,7 @@ def main():
     ap.add_argument("--depts", default="")
     ap.add_argument("--max-docs", type=int, default=2500)
     ap.add_argument("--budget-min", type=float, default=240, help="durée maximale de la collecte, en minutes")
+    ap.add_argument("--pref-batch", type=int, default=16, help="départements de préfecture parcourus par passage")
     a = ap.parse_args()
     only = set(a.only.split(","))
     depts = set(x.strip() for x in a.depts.split(",") if x.strip()) or None
@@ -909,24 +931,34 @@ def main():
     meta = {"collecte": TODAY.isoformat(), "depuis": CUTOFF.isoformat(), "sources": {}}
 
     projects = []
-    for name, fn in [("pe", lambda: src_pe(geo)), ("novae", lambda: src_novae(geo, cache)), ("mrae", lambda: src_mrae(geo))]:
-        if name in only:
+    srcc = cache.setdefault("src", {})
+    old_meta = {}
+    try:
+        old_meta = json.load(open(os.path.join(DATA, "projets-meta.json"), encoding="utf-8")).get("sources_date", {})
+    except Exception:
+        pass
+    meta["sources_date"] = dict(old_meta)
+    runners = [("pe", lambda: src_pe(geo)), ("novae", lambda: src_novae(geo, cache)), ("mrae", lambda: src_mrae(geo)),
+               ("pref", lambda: src_pref(geo, cache, depts, t0 + a.budget_min * 60 * 0.6, a.pref_batch))]
+    for name, fn in runners:
+        run = name in only or name not in srcc  # une source jamais collectée est lancée d'office
+        r = None
+        if run:
             try:
                 r = fn()
-                projects += r
-                meta["sources"][name] = len(r)
+                if name == "pref":
+                    r, meta["prefectures"] = r
+                srcc[name] = r
+                meta["sources_date"][name] = TODAY.isoformat()
             except Exception as e:
-                log(f"Source {name} indisponible : {e}")
-                meta["sources"][name] = f"erreur : {str(e)[:120]}"
-    if "pref" in only:
-        try:
-            r, st = src_pref(geo, cache, depts, t0 + a.budget_min * 60 * 0.55)
-            projects += r
-            meta["sources"]["pref"] = len(r)
-            meta["prefectures"] = st
-        except Exception as e:
-            log(f"Source préfectures indisponible : {e}")
-            meta["sources"]["pref"] = f"erreur : {str(e)[:120]}"
+                log(f"Source {name} indisponible : {e} – résultats précédents conservés")
+                meta["sources"][name + "_erreur"] = str(e)[:120]
+        if r is None:
+            r = srcc.get(name, [])
+            if name == "pref":
+                meta["prefectures"] = {d: cache.get("pref_stats", {}).get(d) for d in PREF_DOMAINS}
+        projects += [dict(p, docs=[tuple(x) for x in p["docs"]], links=[tuple(x) for x in p["links"]]) for p in r]
+        meta["sources"][name] = len(r)
     log(f"Total avant lecture des documents : {len(projects)} ({time.time() - t0:.0f} s)")
 
     meta["documents_lus"] = analyse_docs(projects, postes, cache, a.max_docs, t0 + a.budget_min * 60)

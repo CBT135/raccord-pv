@@ -2,7 +2,7 @@ name: Collecte des projets voisins
 
 on:
   schedule:
-    - cron: "23 3 * * 1"   # chaque lundi, 03:23 UTC
+    - cron: "23 3 * * *"   # chaque jour 03:23 UTC : collecte complète le lundi, préfectures et documents les autres jours
   workflow_dispatch:
     inputs:
       only:
@@ -38,16 +38,21 @@ jobs:
       - name: Collecte
         run: |
           set -o pipefail
+          ONLY="${{ inputs.only }}"; MAXD="${{ inputs.max_docs }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "$(date -u +%u)" = "1" ]; then ONLY="pe,novae,mrae,pref"; MAXD=2500; else ONLY="pref"; MAXD=1500; fi
+          fi
           python3 scripts/collect_projets.py \
-            --only "${{ inputs.only || 'pe,novae,mrae,pref' }}" \
+            --only "${ONLY:-pe,novae,mrae,pref}" \
             --depts "${{ inputs.depts }}" \
-            --max-docs "${{ inputs.max_docs || '2500' }}" \
+            --max-docs "${MAXD:-2500}" \
+            --pref-batch 16 \
             --budget-min 240 2>&1 | tee collecte.log
       - name: Bilan
         if: always()
         run: cat data/projets-meta.json || true
-      - name: Enregistrer (collecte complète uniquement)
-        if: ${{ (inputs.only == '' || inputs.only == 'pe,novae,mrae,pref' || github.event_name == 'schedule') && inputs.depts == '' }}
+      - name: Enregistrer (sauf essai limité à quelques départements)
+        if: ${{ success() && (inputs.depts == '' || github.event_name == 'schedule') }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
