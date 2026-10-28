@@ -74,7 +74,8 @@
       + Object.keys(state.corrRepo).filter((k) => !state.corr[k]).length;
     const b = $("#copyCorr");
     b.hidden = !nLocal;
-    b.textContent = `Copier les positions corrigées (${nLocal} à enregistrer)`;
+    b.textContent = `Enregistrer les positions (${nLocal})`;
+    b.title = "Enregistrer les postes déplacés dans le dépôt GitHub (data/postes-corrections.json)";
   }
   function setPosteLatLng(p, latlng) {
     if (latlng) state.corr[keyOf(p)] = { lat: +latlng.lat.toFixed(6), lon: +latlng.lng.toFixed(6), n: p.n };
@@ -743,13 +744,22 @@
   ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
   ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
-  $("#copyCorr").addEventListener("click", async () => {
-    const out = {};
-    for (const k of Object.keys(state.corr).sort()) out[k] = state.corr[k];
-    const btn = $("#copyCorr"), txt = JSON.stringify(out, null, 1);
-    try { await navigator.clipboard.writeText(txt); btn.textContent = "Copié : à coller dans data/postes-corrections.json"; }
-    catch (_) { btn.textContent = "Copie refusée par le navigateur"; }
-    setTimeout(applyCorrections, 3500);
+  // enregistrement des positions corrigées dans le dépôt (js/editor.js)
+  function localChanges() {
+    const ch = {};
+    for (const [k, v] of Object.entries(state.corr)) { const r = state.corrRepo[k]; if (!r || r.lat !== v.lat || r.lon !== v.lon) ch[k] = { lat: v.lat, lon: v.lon, n: v.n }; }
+    for (const k of Object.keys(state.corrRepo)) if (!state.corr[k]) ch[k] = null;
+    return ch;
+  }
+  $("#copyCorr").addEventListener("click", () => {
+    if (!window.RaccordEditor) return;
+    window.RaccordEditor.open(localChanges(), (saved) => {
+      state.corrRepo = {};
+      for (const [k, v] of Object.entries(saved)) if (v && Number.isFinite(+v.lat) && Number.isFinite(+v.lon)) state.corrRepo[k] = { lat: +(+v.lat).toFixed(6), lon: +(+v.lon).toFixed(6), n: v.n };
+      saveLocalCorr();   // plus rien de propre à ce navigateur
+      applyCorrections();
+      refreshResults();
+    });
   });
   $("#copy").addEventListener("click", async () => {
     const pr = params();

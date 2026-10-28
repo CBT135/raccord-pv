@@ -30,11 +30,13 @@ Les bibliothèques PDF (jsPDF, jsPDF-AutoTable) ne sont chargées qu'au premier 
 
 Les coordonnées publiées par Capareseau sont approximatives. Les postes numérotés se déplacent à la souris (fond « Photographies aériennes » conseillé) ; la distance, le trajet piéton et le coût sont recalculés, et la liste est reclassée par distance. « Rétablir la position Capareseau » annule la correction.
 
-Les positions corrigées sont conservées à trois niveaux :
+Les positions corrigées sont conservées :
 
-1. **Dans le navigateur** : automatiquement, d'une session à l'autre.
-2. **Dans le lien** : les corrections des postes affichés sont incluses dans l'URL (paramètre `mv`), un lien partagé donne donc les mêmes distances.
-3. **Dans le dépôt**, pour tous vos appareils : bouton « Copier les positions corrigées », puis coller le contenu dans `data/postes-corrections.json` (modifiable directement sur GitHub). Ce fichier n'est pas touché par la mise à jour mensuelle Capareseau.
+1. **Dans le navigateur**, automatiquement, tant qu'elles ne sont pas enregistrées.
+2. **Dans le lien** : les corrections des postes affichés sont incluses dans l'URL (paramètre `mv`).
+3. **Dans le dépôt**, pour tous les appareils et tous les utilisateurs : bouton **Enregistrer les positions** au-dessus de la liste des postes. La page écrit `data/postes-corrections.json` par l'API GitHub (même principe que carte-pv-bess). Ce fichier n'est pas touché par la mise à jour Capareseau.
+
+Première utilisation : créer un jeton GitHub *fine-grained* (Settings → Developer settings → Fine-grained tokens) limité au dépôt `raccord-pv`, permission **Contents : Read and write**, le coller dans la fenêtre et choisir un mot de passe. Le jeton est chiffré avec ce mot de passe (AES-GCM, PBKDF2) dans `data/editor.json` ; ensuite seul le mot de passe est demandé. Pour changer de jeton (expiré, révoqué), supprimer `data/editor.json` du dépôt et recommencer.
 
 Format du fichier : `{ "84:SSQUE": { "lat": 45.64308, "lon": 5.13182, "n": "ST-QUENTIN-FALLAVIER" } }` (clé = code région : code poste).
 
