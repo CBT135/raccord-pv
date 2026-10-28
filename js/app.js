@@ -170,7 +170,7 @@
   /* ---------- postes privés (data/postes-prives.json, OpenStreetMap) ---------- */
   const PRIV_T = { prod: "poste privé de producteur", ind: "poste privé de client (industriel)", autre: "poste privé" };
   function privTip(q, d) {
-    return `<div class="pt">${esc(q.n || "Poste sans nom")}</div>
+    return `<div class="pt">${esc(q.n || (q.op ? "Poste " + q.op : "Poste sans nom"))}${q.ref ? ` <span class="pm">(${esc(q.ref)})</span>` : ""}</div>
       <div>${esc(PRIV_T[q.t] || "poste privé")}${q.kv.length ? " · " + q.kv.map((v) => v + " kV").join(" / ") : ""}</div>
       ${q.op ? `<div>Exploitant : ${esc(q.op)}${q.own ? ` · propriétaire : ${esc(q.own)}` : ""}</div>` : ""}
       ${q.start ? `<div class="pm">Mise en service : ${esc(q.start)}</div>` : ""}
@@ -197,7 +197,7 @@
     const near = state.prives.map((q) => ({ q, d: haversine(state.site, q) })).filter((x) => x.d <= R).sort((a, b) => a.d - b.d);
     box.hidden = false;
     box.innerHTML = `<div class="ph"><i class="pin-priv t-prod"></i>Postes privés à moins de ${fmt(R / 1000, 0)} km du site <span class="pm">(OpenStreetMap, hors Capareseau)</span></div>` + (near.length
-      ? `<ul>${near.slice(0, 8).map(({ q, d }) => `<li data-id="${esc(q.id)}"><b>${esc(q.n || "Poste sans nom")}</b> <span class="pm">${esc(PRIV_T[q.t])}${q.kv.length ? " · " + q.kv.join("/") + " kV" : ""}${q.op ? " · " + esc(q.op) : ""} · ${km(d)}</span></li>`).join("")}</ul>${near.length > 8 ? `<div class="pm">… et ${near.length - 8} autres sur la carte</div>` : ""}`
+      ? `<ul>${near.slice(0, 8).map(({ q, d }) => `<li data-id="${esc(q.id)}"><b>${esc(q.n || (q.op ? "Poste " + q.op : "Poste sans nom"))}</b> <span class="pm">${esc(PRIV_T[q.t])}${q.kv.length ? " · " + q.kv.join("/") + " kV" : ""}${q.op ? " · " + esc(q.op) : ""} · ${km(d)}</span></li>`).join("")}</ul>${near.length > 8 ? `<div class="pm">… et ${near.length - 8} autres sur la carte</div>` : ""}`
       : `<div class="pm">Aucun poste privé recensé dans ce rayon.</div>`);
     box.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
       const q = state.prives.find((x) => x.id === li.dataset.id); if (!q) return;
