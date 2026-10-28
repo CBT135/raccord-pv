@@ -3,478 +3,198 @@
  "depuis": "2020-10-28",
  "sources": {
   "pe": 2633,
-  "novae": 1040,
+  "novae": 1041,
   "mrae": 1653,
-  "pref": 1
+  "pref": 27
+ },
+ "sources_date": {
+  "pe": "2026-10-28",
+  "novae": "2026-10-28",
+  "mrae": "2026-10-28",
+  "pref": "2026-10-28"
  },
  "prefectures": {
+  "01": {
+   "resultats": 65,
+   "projets": 27,
+   "le": "2026-10-28"
+  },
+  "02": {
+   "resultats": 65,
+   "projets": 0,
+   "le": "2026-10-28"
+  },
+  "03": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "04": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "05": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
   "06": {
-   "resultats": 62,
-   "projets": 1
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "07": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "08": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
   },
   "09": {
    "resultats": 0,
    "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "04": {
-   "resultats": 65,
-   "projets": 0
-  },
-  "01": {
-   "resultats": 63,
-   "projets": 0
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
   },
   "10": {
    "resultats": 0,
    "projets": 0,
-   "erreur": "Remote end closed connection without response"
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
   },
   "11": {
    "resultats": 0,
    "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "05": {
-   "resultats": 62,
-   "projets": 0
-  },
-  "13": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "14": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
   },
   "12": {
    "resultats": 0,
    "projets": 0,
-   "erreur": "Remote end closed connection without response"
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "13": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "14": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
   },
   "15": {
    "resultats": 0,
    "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "07": {
-   "resultats": 56,
-   "projets": 0
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
   },
   "16": {
    "resultats": 0,
    "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "17": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "18": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "19": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "08": {
-   "resultats": 55,
-   "projets": 0
-  },
-  "23": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "21": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "22": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "24": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "30": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "HTTP Error 404: Not Found"
-  },
-  "25": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "26": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "27": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "29": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "28": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "31": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "32": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "33": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "35": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "34": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "36": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "37": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "38": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "39": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "41": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "40": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "42": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "43": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "44": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "45": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "03": {
-   "resultats": 135,
-   "projets": 0
-  },
-  "46": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "47": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "48": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "49": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "50": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "51": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "52": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "53": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "54": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "55": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "56": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "57": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "58": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "59": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "61": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "60": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "62": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "63": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "64": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "65": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "66": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "67": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "69": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "68": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "70": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "71": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "72": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "73": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "76": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "74": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "77": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "78": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "79": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "80": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "81": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "82": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "83": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "84": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "85": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "86": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "87": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "88": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "89": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "90": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "91": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "92": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "93": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "94": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "95": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response"
-  },
-  "02": {
-   "resultats": 113,
-   "projets": 0
-  }
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-28"
+  },
+  "17": null,
+  "18": null,
+  "19": null,
+  "21": null,
+  "22": null,
+  "23": null,
+  "24": null,
+  "25": null,
+  "26": null,
+  "27": null,
+  "28": null,
+  "29": null,
+  "30": null,
+  "31": null,
+  "32": null,
+  "33": null,
+  "34": null,
+  "35": null,
+  "36": null,
+  "37": null,
+  "38": null,
+  "39": null,
+  "40": null,
+  "41": null,
+  "42": null,
+  "43": null,
+  "44": null,
+  "45": null,
+  "46": null,
+  "47": null,
+  "48": null,
+  "49": null,
+  "50": null,
+  "51": null,
+  "52": null,
+  "53": null,
+  "54": null,
+  "55": null,
+  "56": null,
+  "57": null,
+  "58": null,
+  "59": null,
+  "60": null,
+  "61": null,
+  "62": null,
+  "63": null,
+  "64": null,
+  "65": null,
+  "66": null,
+  "67": null,
+  "68": null,
+  "69": null,
+  "70": null,
+  "71": null,
+  "72": null,
+  "73": null,
+  "74": null,
+  "76": null,
+  "77": null,
+  "78": null,
+  "79": null,
+  "80": null,
+  "81": null,
+  "82": null,
+  "83": null,
+  "84": null,
+  "85": null,
+  "86": null,
+  "87": null,
+  "88": null,
+  "89": null,
+  "90": null,
+  "91": null,
+  "92": null,
+  "93": null,
+  "94": null,
+  "95": null
  },
  "documents_lus": 2500,
- "documents_en_attente": 4097,
+ "documents_en_attente": 1605,
  "projets": {
-  "total": 3912,
-  "avec_poste": 750,
-  "puissance_inconnue": 2289,
-  "eol": 1491,
-  "pv": 2375,
-  "bess": 75
+  "total": 3841,
+  "avec_poste": 1418,
+  "puissance_inconnue": 1727,
+  "pv": 2338,
+  "eol": 1457,
+  "bess": 77
  },
- "duree_s": 2849
+ "duree_s": 4433
 }
