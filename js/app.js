@@ -34,7 +34,7 @@
     withCap: $("#withCap").checked, withRte: $("#withRte").checked, projYears: $("#projYears").checked,
     cMl: num($("#cMl").value) ?? 140, cMl2: num($("#cMl2").value) ?? 230,
     pDep: Math.max(1, num($("#pDep").value) || 17), cCell: (num($("#cCell").value) ?? 90) * 1e3,
-    cMlB: num($("#cMlB").value) ?? 110, cMl2B: num($("#cMl2B").value) ?? 190, cCellB: (num($("#cCellB").value) ?? 0) * 1e3,
+    cMlB: num($("#cMlB").value) ?? 110, cMl2B: num($("#cMl2B").value) ?? 190,
     cPdl: (num($("#cPdl").value) ?? 180) * 1e3, kDet: num($("#kDet").value) || 1.3,
     kV: Math.min(36, Math.max(5, num($("#kV").value) || 20)), duMax: Math.max(0.5, num($("#duMax").value) || 6),
     tphi: Math.max(-1, Math.min(1, num($("#tphi").value) ?? 0)), kIz: Math.max(0.3, num($("#kIz").value) || 1),
@@ -159,9 +159,9 @@
   const URL_FIELDS = [
     ["nom", "#nom"], ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
     ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"], ["tpv", "#t_pv"], ["teol", "#t_eol"], ["tbess", "#t_bess"], ["pu", "#projUnknown"],
-    ["ml", "#cMl"], ["ml2", "#cMl2"], ["mlb", "#cMlB"], ["ml2b", "#cMl2B"], ["pcab", "#pDep"], ["cell", "#cCell"], ["cellb", "#cCellB"], ["pdl", "#cPdl"], ["k", "#kDet"], ["kv", "#kV"], ["du", "#duMax"], ["p240", "#p240"], ["tphi", "#tphi"], ["kiz", "#kIz"],
+    ["ml", "#cMl"], ["ml2", "#cMl2"], ["mlb", "#cMlB"], ["ml2b", "#cMl2B"], ["pcab", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"], ["kv", "#kV"], ["du", "#duMax"], ["p240", "#p240"], ["tphi", "#tphi"], ["kiz", "#kIz"],
   ];
-  const COST_KEYS = ["ml", "ml2", "mlb", "ml2b", "pcab", "cell", "cellb", "pdl", "k"];
+  const COST_KEYS = ["ml", "ml2", "mlb", "ml2b", "pcab", "cell", "pdl", "k"];
   const CAB_KEYS = ["kv", "du", "tphi", "kiz", "p240"];
   const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
   function setTitle() { const n = $("#nom").value.trim(); document.title = n ? `${n} · Raccord PV` : "Raccord PV"; }
@@ -280,9 +280,10 @@
       const rows = CABLES.map((c) => {
         const du = (100 * (c.r * P + c.x * Q) * Lkm) / (U * U);
         const izc = c.iz * pr.kIz, prix = c.prix(pr), prixB = c.prixB(pr);
-        const liaison = Lkm * 1000 * (prix + (n - 1) * prixB), cells = pr.cCell + (n - 1) * pr.cCellB;
+        // un câble triphasé = une cellule départ au poste source + un poste de livraison
+        const liaison = Lkm * 1000 * (prix + (n - 1) * prixB), cells = n * pr.cCell, pdls = n * pr.cPdl;
         return { s: c.s, r: c.r, x: c.x, iz: c.iz, izc, prix, prixB, du, okDu: Math.abs(du) <= pr.duMax, okI: I <= izc,
-          okP: P / 1e6 <= c.pmax(pr) + 1e-9, loss: (100 * c.r * Lkm * S * S) / (U * U) / P, liaison, cells, cost: liaison + cells };
+          okP: P / 1e6 <= c.pmax(pr) + 1e-9, loss: (100 * c.r * Lkm * S * S) / (U * U) / P, liaison, cells, pdls, cost: liaison + cells + pdls };
       }).map((c) => ({ ...c, ok: c.okDu && c.okI && c.okP }));
       return { n, P: P / 1e6, I, rows };
     };
@@ -305,10 +306,10 @@
     const dep = cab.fail ? depP : cab.n;
     const prixMl = cab.best ? cab.best.prix : pr.cMl2, prixMlB = cab.best ? cab.best.prixB : pr.cMl2B;
     const liaison = cab.best ? cab.best.liaison : L_m * (prixMl + (dep - 1) * prixMlB);
-    const cell = cab.best ? cab.best.cells : pr.cCell + (dep - 1) * pr.cCellB;
+    const cell = dep * pr.cCell, pdl = dep * pr.cPdl;
     const qpart = qp !== null ? qp * 1e3 * pr.p : NaN;
     const raccord = liaison + cell + (Number.isFinite(qpart) ? qpart : 0);
-    return { qp, L_m, dep, depP, cab, prixMl, prixMlB, liaison, cell, qpart, pdl: pr.cPdl, raccord, total: raccord + pr.cPdl, estimated: r.route === null };
+    return { qp, L_m, dep, depP, cab, prixMl, prixMlB, liaison, cell, qpart, pdl, raccord, total: raccord + pdl, estimated: r.route === null };
   }
 
   function cabLine(c, pr) {
@@ -360,9 +361,9 @@
           <div class="row"><span>Quote-part S3REnR (${fmt(pr.p)} MW)</span><b>${keur(c.qpart)}</b></div>
           <div class="row"><span>Liaison HTA ${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.prixMl, 0)} €/m${c.dep > 1 ? ` + ${c.dep > 2 ? c.dep - 1 + " × " : ""}${fmt(c.prixMlB, 0)} €/m (câble doublé)` : ""}</span><b>${keur(c.liaison)}</b></div>
           <div class="cab${c.cab.fail ? " fail" : ""}" title="${esc(cabTitle(c, pr))}">${cabLine(c, pr)}</div>
-          <div class="row"><span>Cellule départ poste source</span><b>${keur(c.cell)}</b></div>
+          <div class="row"><span>${c.dep > 1 ? c.dep + " cellules" : "Cellule"} départ poste source</span><b>${keur(c.cell)}</b></div>
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
-          <div class="row"><span>+ poste de livraison</span><b>${keur(c.total)}</b></div>
+          <div class="row"><span>+ ${c.dep > 1 ? c.dep + " postes" : "poste"} de livraison</span><b>${keur(c.total)}</b></div>
         </div>
         <div class="links"><button type="button" class="ghost rep"${state.reporting !== null ? " disabled" : ""}>${state.reporting === idx ? "Rapport en cours…" : "Rapport PDF"}</button><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a>${p.moved ? `<button type="button" class="linkbtn reset">Rétablir la position Capareseau</button>` : ""}<span class="pm">màj ${esc(p.up || "—")}</span></div>`;
       li.querySelector(".reset")?.addEventListener("click", (e) => { e.stopPropagation(); setPosteLatLng(p, null); });
@@ -741,7 +742,7 @@
   $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
   ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
-  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#cCellB", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
+  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
   $("#copyCorr").addEventListener("click", async () => {
     const out = {};
     for (const k of Object.keys(state.corr).sort()) out[k] = state.corr[k];

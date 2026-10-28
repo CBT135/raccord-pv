@@ -52,9 +52,8 @@
           <label>Câble doublé en 240 mm² <span class="unit">€/m</span><input id="cMlB" type="number" step="10" value="110"></label>
           <label>Câble doublé en 400 mm² <span class="unit">€/m</span><input id="cMl2B" type="number" step="10" value="190"></label>
           <label>Puissance max par câble <span class="unit">MW</span><input id="pDep" type="number" step="0.5" value="17"></label>
-          <label>Cellule pour un câble doublé <span class="unit">k€</span><input id="cCellB" type="number" step="5" value="0"></label>
-          <label>Cellule départ au poste source <span class="unit">k€</span><input id="cCell" type="number" step="5" value="90"></label>
-          <label>Poste de livraison <span class="unit">k€</span><input id="cPdl" type="number" step="5" value="180"></label>
+          <label>Cellule départ au poste source (par câble) <span class="unit">k€</span><input id="cCell" type="number" step="5" value="90"></label>
+          <label>Poste de livraison (par câble) <span class="unit">k€</span><input id="cPdl" type="number" step="5" value="180"></label>
           <label>Détour si itinéraire indisponible <span class="unit">×</span><input id="kDet" type="number" step="0.05" value="1.3"></label>
         </div>
         <p class="note">Le prix au mètre de la liaison dépend de la section retenue par le calcul de chute de tension (voir « Câble HTA »). La quote-part S3REnR est celle publiée par Capareseau pour chaque poste.</p>
@@ -68,7 +67,7 @@
           <label>Coefficient sur Iz (pose) <span class="unit">×</span><input id="kIz" type="number" step="0.05" min="0.3" max="1.2" value="1"></label>
           <label>240 mm² : puissance max. par câble <span class="unit">MW</span><input id="p240" type="number" step="0.1" min="0" value="11.8"></label>
         </div>
-        <p class="note">Câbles aluminium 12/20 kV (NF C 33-226) enterrés : 3×1×240 mm² ou 3×1×400 mm². L'outil retient la solution la moins chère (section et nombre de câbles) dont la chute de tension sur la longueur de la liaison reste sous le seuil et dont le courant reste sous l'intensité admissible Iz. Au-delà de 17 MW, la liaison est doublée : chaque câble porte une part égale de la puissance, le second est compté au prix « câble doublé » (110 €/m en 240 mm², 190 €/m en 400 mm²). Le 240 mm² est limité à 11,8 MW par câble. Capareseau ne publie pas la tension HTA des postes : 20 kV par défaut.</p>
+        <p class="note">Câbles aluminium 12/20 kV (NF C 33-226) enterrés : 3×1×240 mm² ou 3×1×400 mm². L'outil retient la solution la moins chère (section et nombre de câbles) dont la chute de tension sur la longueur de la liaison reste sous le seuil et dont le courant reste sous l'intensité admissible Iz. Au-delà de 17 MW, la liaison est doublée : chaque câble porte une part égale de la puissance, le second est compté au prix « câble doublé » (110 €/m en 240 mm², 190 €/m en 400 mm²), avec sa propre cellule et son propre poste de livraison. Le 240 mm² est limité à 11,8 MW par câble. Capareseau ne publie pas la tension HTA des postes : 20 kV par défaut.</p>
       </details>
     </section>
 
