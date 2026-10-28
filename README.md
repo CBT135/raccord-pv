@@ -70,6 +70,8 @@ Une valeur absente ou invalide reprend la valeur par défaut. Si le lien contien
 | Projets soumis à évaluation environnementale | [projets-environnement.gouv.fr](https://www.projets-environnement.gouv.fr/) (API Opendatasoft) | Interrogé en direct |
 | Itinéraire piéton | [Géoplateforme IGN](https://geoservices.ign.fr/documentation/services/services-geoplateforme/itineraire) ; secours [OSRM / FOSSGIS](https://routing.openstreetmap.de/) | En direct |
 | Géocodage, fonds Plan IGN, photos aériennes, cadastre | Géoplateforme IGN | En direct |
+| États techniques et financiers (ETF) des S3REnR | [Pages régionales RTE](https://www.rte-france.com/projets/schemas-regionaux-s3renr) (et ETF Occitanie publiés par RTE) | `data/etf.json`, rafraîchi le 5 de chaque mois |
+| Postes HTB privés (producteurs, clients industriels) | [OpenStreetMap](https://www.openstreetmap.org/) (requête Overpass) + `data/postes-prives-locaux.geojson` | `data/postes-prives.json`, rafraîchi le 5 de chaque mois |
 
 Capareseau n'autorise pas la lecture de ses fichiers depuis un autre site (pas d'en-tête CORS) : la page lit donc l'instantané du dépôt. Pour forcer une mise à jour : onglet **Actions** → « Mise à jour Capareseau » → **Run workflow**.
 
@@ -81,6 +83,25 @@ Champs Capareseau conservés (voir `site/datas/AttributeConfig.json` sur capares
 - `INFO_QP` quote-part unitaire actualisée (k€/MW)
 - `RTE_CDR`, `GRD1_CDR` capacité réservée disponible sans travaux vue de RTE / du GRD
 - `RTE_TVX` travaux prévus au schéma
+
+## ETF S3REnR du poste
+
+Sous « Fiche Capareseau », chaque poste affiche un lien vers le **dernier état technique et financier** du S3REnR de sa région qui le cite, ouvert directement à la première page où il apparaît (les autres pages sont indiquées). `scripts/collect_refs.py etf` (workflow « ETF S3REnR et postes privés ») lit les pages régionales de RTE, télécharge les PDF des ETF (année la plus récente d'abord, Basse- et Haute-Normandie séparées) et y cherche le nom de chaque poste Capareseau de la région. Le lien figure aussi dans le rapport PDF.
+
+## Postes sources privés
+
+Les postes HTB privés (≥ 45 kV) absents de Capareseau sont affichés avec un marqueur carré distinct : **brun** pour les postes de producteurs (centrales, parcs éoliens ou solaires raccordés en HTB), **gris** pour les postes de clients industriels. Une liste des postes privés proches du site s'affiche sous les postes sources. Ils proviennent d'OpenStreetMap (`scripts/collect_refs.py prives`), hors postes RTE, Enedis et entreprises locales de distribution : ce recensement contributif n'est pas exhaustif et aucune capacité d'accueil n'est publiée pour ces postes.
+
+Pour ajouter un poste privé connu (poste mutualisé d'un développeur, poste en projet…), compléter `data/postes-prives-locaux.geojson` :
+
+```json
+{ "type": "Feature",
+  "geometry": { "type": "Point", "coordinates": [2.35, 49.12] },
+  "properties": { "nom": "Poste privé de …", "type": "producteur", "exploitant": "…", "tension_kv": "63",
+                  "mise_en_service": "2027", "commentaire": "poste mutualisé, 3 parcs éoliens", "source": "https://…" } }
+```
+
+`type` : `producteur` ou `industriel`.
 
 ## Projets voisins (PV, éolien, stockage de 1 MW et plus)
 
@@ -99,7 +120,7 @@ Pour chaque projet, la page indique le **poste de raccordement envisagé** quand
 | [Sites des MRAe](https://www.mrae.developpement-durable.gouv.fr/) | avis rendus sur projets 2022 à 2025 | centre de la commune |
 | Sites des préfectures (`www.<département>.gouv.fr`) | participations du public par voie électronique (PPVE), enquêtes publiques | centre de la commune |
 
-Pour chaque projet, l'avis de l'autorité environnementale, le résumé non technique ou l'avis d'enquête (25 Mo au plus) est lu pour en tirer la puissance et les postes sources cités. Un poste n'est retenu que s'il figure dans Capareseau à moins de 55 km du projet ; plusieurs postes cités = options de raccordement. Les doublons entre sources sont fusionnés. `data/projets-cache.json` garde les documents déjà lus : chaque passage ne lit que les nouveaux.
+Pour chaque projet, l'avis de l'autorité environnementale, le résumé non technique ou l'avis d'enquête (25 Mo au plus) est lu pour en tirer la puissance et les postes sources cités. Un poste n'est retenu que s'il figure dans Capareseau à moins de 55 km du projet ; plusieurs postes cités = options de raccordement. Les doublons entre sources sont fusionnés. Un clic sur un projet ouvre la **liste de tous les documents trouvés**, classés par source avec leur taille : pièces du dossier projets-environnement (avis AE, réponse du maître d'ouvrage, étude d'impact, résumé non technique, plans, décision…), pièces publiées sur NOVAE, avis MRAe, documents téléchargeables de la page de la préfecture. `data/projets-cache.json` garde les documents déjà lus : chaque passage ne lit que les nouveaux.
 
 ### Projets non publiés (CDPENAF, permis de construire…)
 
