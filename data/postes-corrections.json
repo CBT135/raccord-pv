@@ -1,5 +1,5 @@
 {
- "75:ETAUL": {
+  "75:ETAUL": {
   "lat": 45.219257,
   "lon": -0.566826,
   "n": "ETAULIERS"
@@ -9,14 +9,29 @@
   "lon": -0.440309,
   "n": "JONZAC"
  },
+ "75:MEDOC": {
+  "lat": 45.297636,
+  "lon": -0.945876,
+  "n": "LESPARRE MEDOC"
+ },
  "75:MTEND": {
   "lat": 45.294813,
   "lon": -0.394478,
   "n": "MONTENDRE"
  },
+ "75:PAUIL": {
+  "lat": 45.20581,
+  "lon": -0.755782,
+  "n": "PAUILLAC (REGIE DU MEDOC)"
+ },
  "75:PONS": {
   "lat": 45.572989,
   "lon": -0.56276,
   "n": "PONS"
+ },
+ "75:THAIM": {
+  "lat": 45.602791,
+  "lon": -0.779021,
+  "n": "THAIMS"
  }
-}
+
