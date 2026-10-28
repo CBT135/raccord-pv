@@ -34,6 +34,7 @@
   /* ---------- texte : jsPDF (polices standard) n'accepte que le jeu Windows-1252 ---------- */
   const WIN = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
   const T = (s) => String(s ?? "").replace(/[    ]/g, " ").replace(/≥/g, ">=").replace(/≤/g, "<=")
+    .replace(/φ/g, "phi").replace(/ΔU/g, "dU").replace(/Δ/g, "d").replace(/Ω/g, "ohm")
     .replace(/[^\x00-\xff]/g, (c) => (WIN.includes(c) ? c : "?"));
   const fmt = (n, d = 1) => (n === null || n === undefined || !Number.isFinite(n) ? "—" : n.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }));
   const kE = (e) => (Number.isFinite(e) ? fmt(e / 1e3, 0) + " k€" : "—");
@@ -308,12 +309,14 @@
 
     // caractéristiques du projet
     heading("Caractéristiques du projet");
-    const prixTxt = d.p <= d.pr.pSeuil ? `${fmt(d.pr.cMl, 0)} €/m (jusqu'à ${fmt(d.pr.pSeuil)} MW)` : `${fmt(d.pr.cMl2, 0)} €/m (au-delà de ${fmt(d.pr.pSeuil)} MW)`;
+    const cb = c.cab.best;
+    const prixTxt = cb ? `3×1×${cb.s} mm² Alu, ${fmt(cb.prix, 0)} €/m` : "aucune section ne convient";
     table({
       body: [
         ["Nom du projet", nom, "Commune", ville || "—"],
         ["Puissance d'injection", `${fmt(d.p)} MW`, "Coordonnées (WGS84)", `${d.site.lat.toFixed(5)}, ${d.site.lon.toFixed(5)}`],
-        ["Départs HTA", `${c.dep} (${fmt(d.pr.pDep)} MW max par départ)`, "Prix liaison HTA", prixTxt],
+        ["Départs HTA", `${c.dep} (${fmt(d.pr.pDep)} MW max par départ${c.cab.added ? ", + " + c.cab.added + " pour la chute de tension" : ""})`, "Câble HTA retenu", prixTxt],
+        ["Tension de raccordement", `${fmt(d.pr.kV, 1)} kV`, "Chute de tension max.", `${fmt(d.pr.duMax, 1)} %`],
         ["Cellule départ poste source", `${fmt(d.pr.cCell / 1e3, 0)} k€`, "Poste de livraison", `${fmt(d.pr.cPdl / 1e3, 0)} k€`],
       ],
       columnStyles: kvStyles,
@@ -331,7 +334,7 @@
       head: [["Poste de coût", "Base de calcul", "Montant"]],
       body: [
         ["Quote-part S3REnR", c.qp !== null ? `${fmt(c.qp, 2)} k€/MW × ${fmt(d.p)} MW` : "quote-part non publiée", kE(c.qpart)],
-        ["Liaison HTA souterraine", `${c.dep > 1 ? c.dep + " départs × " : ""}${kmTxt(c.L_m)} × ${fmt(c.prixMl, 0)} €/m (${src})`, kE(c.liaison)],
+        ["Liaison HTA souterraine", `${c.dep > 1 ? c.dep + " départs × " : ""}${kmTxt(c.L_m)} × ${fmt(c.prixMl, 0)} €/m${cb ? `, 3×1×${cb.s} mm² Alu` : ""} (${src})`, kE(c.liaison)],
         [`Cellule${c.dep > 1 ? "s" : ""} départ au poste source`, `${c.dep} × ${fmt(d.pr.cCell / 1e3, 0)} k€`, kE(c.cell)],
         [{ content: "Raccordement", styles: sub }, { content: "", styles: sub }, { content: kE(c.raccord), styles: sub }],
         ["Poste de livraison", "", kE(c.pdl)],
@@ -346,6 +349,32 @@
     if (P.route === null) warn.push("Itinéraire indisponible : longueur estimée à partir de la distance à vol d'oiseau.");
     if (P.moved) warn.push("Position du poste corrigée à la main (Capareseau donne une position approximative).");
     if (warn.length) { set(8, "normal", C.part); const t = doc.splitTextToSize(T(warn.join(" ")), W); doc.text(t, M, y - 2); y += t.length * 3.6 + 1; }
+
+    // dimensionnement du câble
+    heading("Dimensionnement de la liaison HTA", 50);
+    set(8.5, "normal", C.ink);
+    const cabIntro = doc.splitTextToSize(T(`Raccordement en ${fmt(d.pr.kV, 1)} kV sur ${kmTxt(c.L_m)}, ${c.dep} départ(s) de ${fmt(c.cab.P, 2)} MW, tan φ ${fmt(d.pr.tphi, 2)} : courant ${fmt(c.cab.I, 0)} A par départ. Chute de tension ΔU/U = (R·P + X·Q)·L / U², limitée à ${fmt(d.pr.duMax, 1)} %. Solution retenue : la moins chère, cellules comprises, qui respecte la chute de tension et l'intensité admissible.`), W);
+    doc.text(cabIntro, M, y + 1); y += cabIntro.length * 3.8 + 1;
+    const opts = [];
+    for (const n of [...new Set([c.depP, c.dep])]) {
+      const ref = n === c.cab.n ? c.cab : null;
+      const rows = ref ? ref.rows : d.cableAt(n);
+      for (const x of rows) opts.push([n, x]);
+    }
+    table({
+      head: [["Départs", "Câble", "R / X (Ω/km)", "Iz", "Chute de tension", "Pertes à Pmax", "Liaison + cellules", "Conclusion"]],
+      body: opts.map(([n, x]) => [String(n), `3×1×${x.s} mm² Alu`, `${fmt(x.r, 3)} / ${fmt(x.x, 3)}`, `${fmt(x.izc, 0)} A`, `${fmt(x.du, 2)} %`, `${fmt(x.loss, 1)} %`, kE(x.cost),
+        x.ok ? (cb && n === c.dep && x.s === cb.s ? "retenu" : "possible") : !x.okP ? `projet > ${fmt(d.pr.p240, 1)} MW` : !x.okDu ? "chute de tension trop forte" : "intensité trop forte"]),
+      styles: { font: "helvetica", fontSize: 7.8, cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 }, textColor: C.ink, lineColor: C.line, lineWidth: { bottom: 0.15 } },
+      columnStyles: { 0: { cellWidth: 14 }, 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" } },
+      didParseCell: (h) => {
+        if (h.section !== "body") return;
+        const [n, x] = opts[h.row.index];
+        if (cb && n === c.dep && x.s === cb.s) { h.cell.styles.fillColor = C.selRow; h.cell.styles.fontStyle = "bold"; }
+        if (h.column.index === 7 && !x.ok) h.cell.styles.textColor = C.none;
+      },
+    });
+    if (!cb) { set(8, "normal", C.none); doc.text(doc.splitTextToSize(T("Aucune des deux sections ne respecte la chute de tension avec un nombre raisonnable de départs : raccordement en HTB ou poste plus proche à étudier."), W), M, y - 2); y += 6; }
 
     // informations du poste source
     heading(`Poste source ${P.nom}`, 55);
@@ -368,11 +397,12 @@
     // récapitulatif
     heading("Tableau récapitulatif des postes affichés", 45);
     table({
-      head: [["#", "Poste", "GRD", "Reste à affecter", "Rempl.", "Vol d'oiseau", "Trajet", "Quote-part", "Raccordement", "Avec PDL"]],
+      head: [["#", "Poste", "GRD", "Reste à affecter", "Rempl.", "Vol d'oiseau", "Trajet", "Câble (ΔU)", "Quote-part", "Raccordement", "Avec PDL"]],
       body: d.postes.map((p, i) => [String(i + 1), p.nom + (p.moved ? " *" : ""), p.grd, `${fmt(p.cap)} MW`, p.v.INFO_TX || "—", kmTxt(p.d), p.route !== null ? kmTxt(p.route) : "—",
+        p.cost.cab.best ? `${p.cost.dep > 1 ? p.cost.dep + "×" : ""}${p.cost.cab.best.s} (${fmt(p.cost.cab.best.du, 1)} %)` : "aucun",
         p.cost.qp !== null ? `${fmt(p.cost.qp, 2)} k€/MW` : "—", kE(p.cost.raccord), kE(p.cost.total)]),
       styles: { font: "helvetica", fontSize: 7.6, cellPadding: { top: 1.3, bottom: 1.3, left: 1.2, right: 1.2 }, textColor: C.ink, lineColor: C.line, lineWidth: { bottom: 0.15 }, overflow: "linebreak" },
-      columnStyles: { 0: { cellWidth: 6 }, 1: { cellWidth: 40 }, 2: { cellWidth: 15 }, 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 9: { halign: "right" } },
+      columnStyles: { 0: { cellWidth: 6 }, 1: { cellWidth: 33 }, 2: { cellWidth: 13 }, 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 9: { halign: "right" }, 10: { halign: "right" } },
       didParseCell: (h) => {
         if (h.section === "head" && h.column.index >= 3) h.cell.styles.halign = "right";
         if (h.section === "body") {
@@ -431,7 +461,8 @@
     set(7.6, "normal", C.muted);
     const notes = [
       `Capacités d'accueil, quote-part et travaux : Capareseau (RTE et gestionnaires de distribution), extraction du ${d.extraction || "—"}, mise à jour du poste étudié le ${P.up || "—"}. Les capacités évoluent en continu : seule une demande de raccordement (proposition technique et financière) engage le gestionnaire de réseau.`,
-      `Coût : quote-part S3REnR × puissance d'injection, plus liaison HTA souterraine sur la longueur du trajet piéton (${fmt(d.pr.cMl, 0)} €/m jusqu'à ${fmt(d.pr.pSeuil)} MW d'injection, ${fmt(d.pr.cMl2, 0)} €/m au-delà ; ${fmt(d.pr.pDep)} MW max par départ), cellule(s) départ à ${fmt(d.pr.cCell / 1e3, 0)} k€ et poste de livraison à ${fmt(d.pr.cPdl / 1e3, 0)} k€. Ordres de grandeur pour une pré-étude, hors renforcements, études et frais de gestion.`,
+      `Coût : quote-part S3REnR × puissance d'injection, plus liaison HTA souterraine sur la longueur du trajet piéton (3×1×240 mm² Alu à ${fmt(d.pr.cMl, 0)} €/m ou 3×1×400 mm² Alu à ${fmt(d.pr.cMl2, 0)} €/m selon le calcul de chute de tension ; ${fmt(d.pr.pDep)} MW max par départ), cellule(s) départ à ${fmt(d.pr.cCell / 1e3, 0)} k€ et poste de livraison à ${fmt(d.pr.cPdl / 1e3, 0)} k€. Ordres de grandeur pour une pré-étude, hors renforcements, études et frais de gestion.`,
+      `Câbles : aluminium 12/20 kV (NF C 33-226), trois unipolaires en trèfle enterrés ; valeurs typiques de catalogue (240 mm² : R 0,161 Ω/km à 90 °C, X 0,11 Ω/km, Iz 375 A ; 400 mm² : R 0,102 Ω/km, X 0,105 Ω/km, Iz 480 A${d.pr.kIz !== 1 ? `, Iz × ${fmt(d.pr.kIz, 2)} pour la pose` : ""} ; 240 mm² réservé aux projets de ${fmt(d.pr.p240, 1)} MW au plus), à confirmer avec la fiche du fabricant et les conditions de pose. La tension HTA du poste n'étant pas publiée par Capareseau, ${fmt(d.pr.kV, 1)} kV est une hypothèse.`,
       "Trajet : itinéraire piéton IGN Géoplateforme (BD TOPO), à défaut OSRM (OpenStreetMap). Il approxime le tracé sous voirie et ne tient pas compte des traversées (voies ferrées, autoroutes, cours d'eau) ni des contraintes de pose.",
       `Projets voisins : ${d.projMeta ? `collecte du ${new Date(d.projMeta.collecte).toLocaleDateString("fr-FR")} sur projets-environnement.gouv.fr, les avis MRAe (plateforme nationale et sites régionaux) et les sites des préfectures (participations du public, enquêtes publiques)` : "projets-environnement.gouv.fr"}${d.projets.some((p) => p.kind === "local" || p.kind === "import") ? ", plus les projets ajoutés par l'utilisateur" : ""}. Seuls les projets d'au moins 1 MW, ou de puissance non communiquée, sont retenus. Fond de carte : ${map ? map.attr : "—"}.`,
     ];

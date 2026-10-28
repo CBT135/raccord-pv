@@ -6,7 +6,8 @@ Outil cartographique de pré-étude de raccordement d'un projet photovoltaïque 
 2. L'outil affiche les 3 à 5 postes sources les plus proches à vol d'oiseau avec, pour chacun, la **capacité d'accueil réservée au titre du S3REnR qui reste à affecter** (Capareseau, champ `INFO_NA`).
 3. Il calcule le **trajet piéton** site → poste (IGN Géoplateforme, BD TOPO ; secours OSRM/OSM) et un lien Google Maps pour vérifier.
 4. Il chiffre un **coût de raccordement indicatif** : quote-part S3REnR du poste + liaison HTA souterraine sur la longueur du trajet + cellule(s) départ au poste source (+ poste de livraison). Les ratios sont modifiables dans « Hypothèses de coût ».
-   Valeurs par défaut : liaison HTA 140 €/m jusqu'à 10 MW d'injection et 180 €/m au-delà, cellule départ 90 k€, poste de livraison 180 k€, 12 MW par départ HTA.
+   Valeurs par défaut : liaison HTA en 3×1×240 mm² Alu à 140 €/m ou 3×1×400 mm² Alu à 230 €/m selon le calcul de câble, cellule départ 90 k€, poste de livraison 180 k€, 12 MW par départ HTA.
+6. Il **dimensionne le câble HTA** : pour la tension de raccordement (20 kV par défaut, Capareseau ne la publie pas), la longueur de la liaison et la puissance par départ, il calcule la chute de tension ΔU/U = (R·P + X·Q)·L / U² et le courant, puis retient la solution la moins chère (section × nombre de départs, cellules comprises) qui reste sous 6 % de chute de tension et sous l'intensité admissible. Le 240 mm² est réservé aux projets de 11,8 MW au plus. Câbles : valeurs typiques de catalogue (240 mm² : R 0,161 Ω/km à 90 °C, X 0,11 Ω/km, Iz 375 A ; 400 mm² : R 0,102 Ω/km, X 0,105 Ω/km, Iz 480 A), réglables dans « Câble HTA » (tension, chute max., tan φ, coefficient de pose sur Iz, seuil du 240 mm²).
 5. Il positionne les **projets voisins en injection** (PV, éolien, stockage ≥ 1 MW) autour du site et du poste sélectionné, avec leur poste de raccordement envisagé quand il est publié (voir plus bas).
 
 Le bouton « Copier le tableau » met les résultats dans le presse-papiers au format tableur.
@@ -47,9 +48,9 @@ L'adresse de la page enregistre le site et tous les réglages ; copier l'URL suf
 
 | Clé | Réglage | Clé | Réglage |
 |---|---|---|---|
-| `nom` | nom du projet | | |
-| `lat,lon` | position du site (facultative) | `ml` | liaison HTA jusqu'au seuil (€/m) |
-| `seuil` | seuil de puissance d'injection (MW) | `ml2` | liaison HTA au-delà du seuil (€/m) |
+| `nom` | nom du projet | `kv`, `du`, `tphi`, `kiz`, `p240` | câble HTA : tension (kV), chute max (%), tan φ, coefficient Iz, seuil 240 mm² (MW) |
+| `lat,lon` | position du site (facultative) | `ml` | prix du 3×240 mm² (€/m) |
+| | | `ml2` | prix du 3×400 mm² (€/m) |
 | `p` | puissance d'injection (MW) | `dep` | puissance max par départ HTA (MW) |
 | `n` | postes affichés (3 à 5) | `cell` | cellule départ au poste source (k€) |
 | `min` | capacité restante minimum (MW) | `pdl` | poste de livraison (k€) |

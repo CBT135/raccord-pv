@@ -188,3 +188,6 @@ a { color: var(--accent); }
 .lg { width: 10px; height: 10px; display: inline-block; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .3); }
 .lg.t-pv { background: var(--pv); transform: rotate(45deg); } .lg.t-eol { background: var(--eol); border-radius: 50%; } .lg.t-bess { background: var(--bess); }
 .lg.same { background: transparent; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--accent); }
+
+.cab { font-size: 11.5px; color: var(--muted); font-family: var(--f-mono); padding-left: 2px; }
+.cab.fail { color: var(--none); font-family: var(--f-body); }
