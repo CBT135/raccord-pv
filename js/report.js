@@ -194,14 +194,18 @@
     g.fillStyle = color; g.fillText(text, x0 + 4, y + 0.5);
   }
 
-  /* ---------- commune (géocodage inverse IGN) ---------- */
+  /* ---------- commune : découpage communal (geo.api.gouv.fr), à défaut adresse la plus proche (IGN) ---------- */
+  const getJson = async (url) => { const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 5000); try { return await fetch(url, { signal: ctl.signal }).then((r) => r.json()); } finally { clearTimeout(t); } };
   async function commune(site) {
     try {
-      const ctl = new AbortController(); setTimeout(() => ctl.abort(), 5000);
-      const j = await fetch(`https://data.geopf.fr/geocodage/reverse?lon=${site.lon}&lat=${site.lat}&index=address&limit=1`, { signal: ctl.signal }).then((r) => r.json());
-      const p = j.features?.[0]?.properties; if (!p?.city) return null;
-      return `${p.city}${p.postcode ? ` (${p.postcode.slice(0, 2)})` : ""}`;
-    } catch (_) { return null; }
+      const j = await getJson(`https://geo.api.gouv.fr/communes?lat=${site.lat}&lon=${site.lon}&fields=nom,codeDepartement&format=json`);
+      if (Array.isArray(j) && j[0]?.nom) return `${j[0].nom} (${j[0].codeDepartement})`;
+    } catch (_) {}
+    try {
+      const j = await getJson(`https://data.geopf.fr/geocodage/reverse?lon=${site.lon}&lat=${site.lat}&index=address&limit=1`);
+      const p = j.features?.[0]?.properties; if (p?.city) return `${p.city}${p.postcode ? ` (${p.postcode.slice(0, 2)})` : ""}`;
+    } catch (_) {}
+    return null;
   }
 
   /* ---------- PDF ---------- */
@@ -245,7 +249,8 @@
       ["sq", C.ok, "Capacité restante suffisante"], ["sq", C.part, "Capacité partielle"], ["sq", C.none, "Sans capacité restante"],
       ["sq", C.proj, "Projet PV publié (P1…)"],
     ];
-    if (d.projets.some((p) => p.kind !== "pe")) items.push(["sq", C.loc, "Projet ajouté"]);
+    if (!d.projets.some((p) => p.onMap && p.kind === "pe")) items.pop(); // pas de projet publié sur la carte
+    if (d.projets.some((p) => p.onMap && p.kind !== "pe")) items.push(["sq", C.loc, "Projet ajouté"]);
     let lx = M;
     for (const [kind, col, txt] of items) {
       const tw = doc.getTextWidth(T(txt)) + 9;
@@ -355,11 +360,15 @@
       },
     });
     set(7.5, "normal", C.muted);
-    doc.text(T(`Ligne surlignée : poste étudié.${d.postes.some((p) => p.moved) ? " * position corrigée à la main." : ""} Montants calculés avec les mêmes hypothèses pour chaque poste ; trajet « — » : longueur estimée.`), M, y - 3, { maxWidth: W });
-    y += 3;
+    const nt = doc.splitTextToSize(T(`Ligne surlignée : poste étudié.${d.postes.some((p) => p.moved) ? " * position corrigée à la main." : ""} Montants calculés avec les mêmes hypothèses pour chaque poste ; trajet « — » : longueur estimée.`), W);
+    doc.text(nt, M, y - 3); y += nt.length * 3.3;
 
     // projets
-    if (d.projets.length) {
+    if (!d.projets.length) {
+      heading(`Projets PV dans un rayon de ${fmt(d.pr.radius, 0)} km`, 16);
+      set(8.5, "normal", C.ink);
+      doc.text(T(`Aucun projet PV publié sur projets-environnement.gouv.fr${d.projYears ? " depuis moins de 5 ans" : ""} dans ce rayon.`), M, y + 1); y += 8;
+    } else {
       heading(`Projets PV dans un rayon de ${fmt(d.pr.radius, 0)} km`, 35);
       const list = d.projets.slice(0, 20);
       table({

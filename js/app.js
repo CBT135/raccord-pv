@@ -331,7 +331,7 @@
     const pr = params();
     const baseName = Object.keys(base).find((k) => map.hasLayer(base[k])) || "Plan IGN";
     return {
-      nom: $("#nom").value.trim(), p: pr.p, pr, site: { ...state.site }, sel: idx,
+      nom: $("#nom").value.trim(), p: pr.p, pr, site: { ...state.site }, sel: idx, projYears: pr.projYears,
       base: baseName.startsWith("Photo") ? "ortho" : baseName === "OpenStreetMap" ? "osm" : "plan",
       postes: state.results.map((r) => {
         const p = r.p, cap = capOf(p);
