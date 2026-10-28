@@ -89,7 +89,7 @@ def http(url, binary=False, max_bytes=None, timeout=60, tries=3):
             last = e
         except Exception as e:  # réseau, délai
             last = e
-        time.sleep((20 if pref else 3) * (k + 1))
+        time.sleep((10 if pref else 3) * (k + 1))
     raise last
 
 
@@ -675,7 +675,7 @@ def src_pref(geo, cache, depts=None, deadline=None, batch=16):
         if deadline and time.time() > deadline:
             log(f"  budget de temps atteint, {dep} reporté")
             break
-        res, st = pref_dept(geo, pc, dep, dom)
+        res, st = pref_dept(geo, pc, dep, dom, deadline)
         st["le"] = TODAY.isoformat()
         stats[dep] = st
         if "erreur" in st and not res:
@@ -687,19 +687,22 @@ def src_pref(geo, cache, depts=None, deadline=None, batch=16):
     return out, {d: stats.get(d) for d in PREF_DOMAINS}
 
 
-def pref_dept(geo, pc, dep, dom):
+def pref_dept(geo, pc, dep, dom, deadline=None):
     out = []
     if True:
         base = f"https://www.{dom}.gouv.fr"
-        cards, err = {}, None
+        cards, err, fails = {}, None, 0
         for kw in PREF_KEYWORDS:
+            if fails >= 2 or (deadline and time.time() > deadline):
+                break  # site qui refuse les connexions ou budget atteint : département repris au prochain passage
             for page in range(6):
                 u = f"{base}/content/search?SearchText={urllib.parse.quote(kw)}" if page == 0 else \
                     f"{base}/contenu/recherche/(offset)/{10 * page}?SearchText={urllib.parse.quote(kw)}&dateFilter[]="
                 try:
-                    soup = BeautifulSoup(http(u, timeout=45, tries=3), "html.parser")
+                    soup = BeautifulSoup(http(u, timeout=30, tries=2), "html.parser")
                 except Exception as e:
                     err = str(e)[:80]
+                    fails += 1
                     break
                 cs = soup.select(".fr-card__content")
                 if not cs:
@@ -720,7 +723,11 @@ def pref_dept(geo, pc, dep, dom):
                 if old >= len(cs) - 1 or len(cs) < 10:
                     break
         kept = 0
+        if fails >= 2 and not cards:
+            return out, {"resultats": 0, "projets": 0, "erreur": err}
         for href, (title, desc, d) in cards.items():
+            if deadline and time.time() > deadline:
+                break
             if SKIP_URL.search(href) or not href.startswith(base):
                 continue
             t = norm(title + " " + desc)
@@ -731,7 +738,7 @@ def pref_dept(geo, pc, dep, dom):
             ent = pc.get(key)
             if not ent or ent.get("d") != d:
                 try:
-                    soup = BeautifulSoup(http(href, timeout=60, tries=3), "html.parser")
+                    soup = BeautifulSoup(http(href, timeout=40, tries=2), "html.parser")
                 except Exception as e:
                     log("  page préfecture illisible", href, e)
                     continue
