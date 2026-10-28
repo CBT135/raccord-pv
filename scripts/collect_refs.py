@@ -62,7 +62,7 @@ def discover():
     out = {(u): (r, y, n, u) for r, y, n, u in KNOWN}
     for code, slug in REGION_PAGES.items():
         try:
-            html = cp.http(RTE + slug, timeout=40, tries=2).decode("utf-8", "replace")
+            html = cp.http(RTE + slug, timeout=40, tries=2)
         except Exception as e:
             log(f"ETF : page {slug} illisible ({e}) ; liste connue utilisée")
             continue
@@ -89,7 +89,7 @@ def pdf_pages(url):
         f.flush()
         r = subprocess.run(["pdftotext", "-q", "-enc", "UTF-8", f.name, "-"], capture_output=True, timeout=300)
     pages = r.stdout.decode("utf-8", "replace").split("\f")
-    return [" " + cp.norm(p) + " " for p in pages], len(data)
+    return [" " + cp.norm(p) + " " for p in pages], [cp.strip_accents(p) for p in pages], len(data)
 
 
 def name_rx(key):
@@ -102,7 +102,7 @@ def etf():
     res, meta_docs = {}, []
     for code, year, name, url in docs:
         try:
-            pages, size = pdf_pages(url)
+            pages, raw, size = pdf_pages(url)
         except Exception as e:
             log(f"ETF {name} {year} : échec ({e})")
             continue
@@ -114,7 +114,10 @@ def etf():
             found = []
             for key in p["keys"]:
                 if len(key) < 4 and " " not in key:
-                    continue  # nom trop court pour une recherche plein texte fiable
+                    # nom court (GY, HAM, RUE…) : seulement écrit en capitales dans le texte d'origine
+                    rx = re.compile(r"(?<![A-Za-z0-9])" + re.escape(key) + r"(?![A-Za-z0-9])")
+                    found += [i + 1 for i, t in enumerate(raw) if rx.search(t)]
+                    continue
                 rx = name_rx(key)
                 found += [i + 1 for i, t in enumerate(pages) if rx.search(t)]
             if not found:
@@ -138,6 +141,8 @@ QUERY = """[out:json][timeout:600];
 area["ISO3166-1"="FR"][admin_level=2]->.fr;
 nwr["power"="substation"]["voltage"~"(^|;)(45000|63000|90000|150000|225000|400000)($|;)"](area.fr);
 out center tags;"""
+ELD = re.compile(r"GREENALP|RESEDA|\bSER\b|SYNELVA|VIALIS|SUD REOLE|ENERCAL|BRIANCONNAIS|MAYOTTE|GEREDIS|\bSRD\b|SEOLIS|SICAE|\bURM\b|REGIE|HUNELEC|"
+                 r"ENERGIES? SERVICES|\bENE\b|STRASBOURG|\bGEG\b|GAZ ET ELECTRICITE|ENEDIS|ERDF|\bRTE\b|RESEAU DE TRANSPORT|ELECTRICITE DE FRANCE|\bEDF\b|EDF SEI|COOPERATIVE")
 GRID = re.compile(r"\b(RTE|R\.T\.E|ENEDIS|ERDF|EDF(?! ?(?:RENOUVELABLES|EN\b|-?R\b))|GRDF|SICAE|REGIE|RÉGIE|GEG|SRD|GEREDIS|GÉRÉDIS|STRASBOURG|ÉLECTRICITÉ DE STRASBOURG|ELECTRICITE DE STRASBOURG|ES RESEAUX|URM|SEOLIS|SÉOLIS|ENERGIS|COMPAGNIE NATIONALE DU RHONE|SOREA|SER |RESEAU DE TRANSPORT|RÉSEAU DE TRANSPORT|GAZELEC)\b", re.I)
 RAIL = re.compile(r"SNCF|RFF|R[ée]seau ferr|RATP|TRAMWAY|M[ée]tro", re.I)
 PROD = re.compile(r"[ée]olien|solaire|photovolta|parc |centrale|wind|solar|neoen|valorem|engie|total|q ?energy|boralex|voltalia|urbasolar|edf renouvelables|edf-r|akuo|cnr|tenergie|baywa|iberdrola|enercoop|rwe|abo |vsb|wpd|eole|res |innovent|ostwind|enertrag|eurocape|elicio|tse|arkolia|langa|valeco|amarenco|apex", re.I)
@@ -183,16 +188,20 @@ def prives():
         name = (t.get("name") or t.get("ref") or "").strip()
         sub = t.get("substation", "")
         who = " ".join([op, own])
-        if not op and not own and sub not in ("industrial", "generation") and not PROD.search(name):
-            continue  # sans exploitant renseigné : le plus souvent un poste RTE ou un poste source
-        if GRID.search(who) or (not who.strip() and GRID.search(name)):
+        if not cp.in_metro(lat, lon) or (lon > 8.4 and lat < 43.1):
+            continue  # métropole continentale (Corse et outre-mer hors S3REnR)
+        if sub in ("traction", "converter") or RAIL.search(who) or RAIL.search(name):
             continue
-        if RAIL.search(who) or RAIL.search(name) or sub == "traction":
-            continue
+        nwho = cp.norm(who)
+        if sub != "generation":
+            if not op and not own and sub != "industrial" and not PROD.search(name):
+                continue  # sans exploitant renseigné : le plus souvent un poste RTE ou un poste source
+            if ELD.search(nwho) or GRID.search(who) or (not who.strip() and GRID.search(name)):
+                continue  # RTE, Enedis, entreprises locales de distribution, EDF hors centrales
         # déjà un poste Capareseau à moins de 400 m : on considère qu'il s'agit du même
         if any(cp.hav((lat, lon), (p["lat"], p["lon"])) < 0.4 for p in postes.near(lat, lon, 2)):
             continue
-        kind = "prod" if (sub == "generation" or PROD.search(who + " " + name)) else ("ind" if sub == "industrial" else "autre")
+        kind = "prod" if (sub == "generation" or PROD.search(who + " " + name)) else ("ind" if sub in ("industrial", "transition") or op else "autre")
         out.append({"id": f"{e['type'][0]}{e['id']}", "n": name or None, "op": op or own or None, "own": own if own and own != op else None,
                     "kv": kv(t.get("voltage")), "t": kind, "sub": sub or None,
                     "lat": round(lat, 5), "lon": round(lon, 5),

@@ -12,7 +12,7 @@
   const PV_RE = /photovolta|solaire|agrivolta|\bPV\b|ombri[eè]re/i;
 
   const state = { postes: [], meta: null, site: null, results: [], sel: 0, localProj: [], importedProj: [], projects: [], routeSeq: 0,
-    corr: {}, corrRepo: {}, lastDrag: 0, corrError: null, reporting: null, collected: [], projMeta: null, live: null, liveSig: null, liveErr: null };
+    corr: {}, corrRepo: {}, lastDrag: 0, corrError: null, reporting: null, collected: [], projMeta: null, live: null, liveSig: null, liveErr: null, etf: null, prives: [], privMeta: null };
   const LS_CORR = "raccordpv.positions"; // positions corrigées dans ce navigateur
 
   /* ---------- utilitaires ---------- */
@@ -114,8 +114,10 @@
   const lyrPostes = L.layerGroup().addTo(map);
   const lyrProj = L.layerGroup().addTo(map);
   const lyrRadius = L.layerGroup().addTo(map);
+  const lyrPriv = L.layerGroup().addTo(map);
   overlays["Tous les postes Capareseau"] = lyrAll;
-  overlays["Projets PV"] = lyrProj;
+  overlays["Postes privés (OSM)"] = lyrPriv;
+  overlays["Projets voisins"] = lyrProj;
   L.control.layers(base, overlays, { collapsed: true }).addTo(map);
   L.control.scale({ imperial: false }).addTo(map);
   let siteMarker = null;
@@ -151,7 +153,57 @@
       <div>Capacité réservée : ${fmt(num(v.INFO_CR))} MW · remplissage ${esc(v.INFO_TX || "—")}</div>
       <div>File d'attente S3REnR : ${fmt(num(v.INFO_FAS3R))} MW · en service : ${fmt(num(v.INFO_ESS3R))} MW</div>
       <div>Quote-part : ${esc(v.INFO_QP || "—")}</div>
-      <div class="pm">Capareseau, mise à jour ${esc(p.up || "—")}${p.moved ? " · position corrigée à la main" : ""}</div>`;
+      <div class="pm">Capareseau, mise à jour ${esc(p.up || "—")}${p.moved ? " · position corrigée à la main" : ""}</div>${etfLine(p)}`;
+  }
+
+  /* ---------- ETF S3REnR (data/etf.json) ---------- */
+  const etfOf = (p) => (state.etf && state.etf.postes && state.etf.postes[keyOf(p)]) || null;
+  const frDate = (d) => (d ? new Date(d).toLocaleDateString("fr-FR") : "");
+  function etfLine(p) {
+    const e = etfOf(p);
+    if (!state.etf) return "";
+    if (!e) return `<div class="etf pm">Poste non cité dans les états techniques et financiers S3REnR publiés par RTE</div>`;
+    const pages = e.pp && e.pp.length > 1 ? `pages ${e.pp.slice(0, 6).join(", ")}${e.pp.length > 6 ? "…" : ""}` : `page ${e.p}`;
+    return `<div class="etf"><a href="${esc(e.u)}#page=${e.p}" target="_blank" rel="noopener" title="État technique et financier ${e.y} du S3REnR ${esc(e.n)}${e.d ? ", publié en " + esc(new Date(e.d).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })) : ""}">ETF S3REnR ${e.y} – ${esc(e.n)}</a> <span class="pm">poste cité ${pages}</span></div>`;
+  }
+
+  /* ---------- postes privés (data/postes-prives.json, OpenStreetMap) ---------- */
+  const PRIV_T = { prod: "poste privé de producteur", ind: "poste privé de client (industriel)", autre: "poste privé" };
+  function privTip(q, d) {
+    return `<div class="pt">${esc(q.n || "Poste sans nom")}</div>
+      <div>${esc(PRIV_T[q.t] || "poste privé")}${q.kv.length ? " · " + q.kv.map((v) => v + " kV").join(" / ") : ""}</div>
+      ${q.op ? `<div>Exploitant : ${esc(q.op)}${q.own ? ` · propriétaire : ${esc(q.own)}` : ""}</div>` : ""}
+      ${q.start ? `<div class="pm">Mise en service : ${esc(q.start)}</div>` : ""}
+      ${d !== undefined ? `<div class="pm">${km(d)} du site à vol d'oiseau</div>` : ""}
+      ${q.x ? `<div class="x">${esc(q.x)}</div>` : ""}
+      <div class="pm">Absent de Capareseau : pas de capacité S3REnR publiée. Source : ${q.loc ? "postes privés ajoutés au dépôt" : "OpenStreetMap"}.</div>`;
+  }
+  function drawPrives() {
+    lyrPriv.clearLayers();
+    if (!state.prives.length || map.getZoom() < 8) return;
+    const b = map.getBounds().pad(0.2);
+    for (const q of state.prives) {
+      if (!b.contains([q.lat, q.lon])) continue;
+      L.marker([q.lat, q.lon], { icon: L.divIcon({ className: "", html: `<div class="pin-priv t-${q.t}"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }), keyboard: false })
+        .bindTooltip(privTip(q, state.site ? haversine(state.site, q) : undefined), { direction: "top", className: "ptip", opacity: 1 })
+        .bindPopup(privTip(q, state.site ? haversine(state.site, q) : undefined) + (q.loc ? (q.src ? `<div class="plinks"><a href="${esc(q.src)}" target="_blank" rel="noopener">Source</a></div>` : "") : `<div class="plinks"><a href="https://www.openstreetmap.org/${{ n: "node", w: "way", r: "relation" }[q.id[0]]}/${q.id.slice(1)}" target="_blank" rel="noopener">Fiche OpenStreetMap</a></div>`), { maxWidth: 320 })
+        .addTo(lyrPriv);
+    }
+  }
+  function renderPrives() {
+    const box = $("#privList"); if (!box) return;
+    if (!state.site || !state.prives.length) { box.hidden = true; return; }
+    const R = Math.max(params().radius, 20) * 1000;
+    const near = state.prives.map((q) => ({ q, d: haversine(state.site, q) })).filter((x) => x.d <= R).sort((a, b) => a.d - b.d);
+    box.hidden = false;
+    box.innerHTML = `<div class="ph"><i class="pin-priv t-prod"></i>Postes privés à moins de ${fmt(R / 1000, 0)} km du site <span class="pm">(OpenStreetMap, hors Capareseau)</span></div>` + (near.length
+      ? `<ul>${near.slice(0, 8).map(({ q, d }) => `<li data-id="${esc(q.id)}"><b>${esc(q.n || "Poste sans nom")}</b> <span class="pm">${esc(PRIV_T[q.t])}${q.kv.length ? " · " + q.kv.join("/") + " kV" : ""}${q.op ? " · " + esc(q.op) : ""} · ${km(d)}</span></li>`).join("")}</ul>${near.length > 8 ? `<div class="pm">… et ${near.length - 8} autres sur la carte</div>` : ""}`
+      : `<div class="pm">Aucun poste privé recensé dans ce rayon.</div>`);
+    box.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
+      const q = state.prives.find((x) => x.id === li.dataset.id); if (!q) return;
+      map.setView([q.lat, q.lon], Math.max(map.getZoom(), 12));
+      setTimeout(() => lyrPriv.eachLayer((l) => { const ll = l.getLatLng(); if (ll.lat === q.lat && ll.lng === q.lon) l.openPopup(); }), 300);
+    }));
   }
 
   /* ---------- état dans l'URL ----------
@@ -249,6 +301,7 @@
     $("#site").textContent = `Site : ${state.site.lat.toFixed(5)}, ${state.site.lon.toFixed(5)}`;
     $("#hint").hidden = true;
     renderList(firstFull);
+    renderPrives();
     drawPostes();
     writeHash(); // inclut les positions corrigées des postes affichés
     if (fit && state.results.length) {
@@ -366,7 +419,7 @@
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
           <div class="row"><span>+ ${c.dep > 1 ? c.dep + " postes" : "poste"} de livraison</span><b>${keur(c.total)}</b></div>
         </div>
-        <div class="links"><button type="button" class="ghost rep"${state.reporting !== null ? " disabled" : ""}>${state.reporting === idx ? "Rapport en cours…" : "Rapport PDF"}</button><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a>${p.moved ? `<button type="button" class="linkbtn reset">Rétablir la position Capareseau</button>` : ""}<span class="pm">màj ${esc(p.up || "—")}</span></div>`;
+        <div class="links"><button type="button" class="ghost rep"${state.reporting !== null ? " disabled" : ""}>${state.reporting === idx ? "Rapport en cours…" : "Rapport PDF"}</button><a href="${gm}" target="_blank" rel="noopener">Itinéraire Google Maps</a><a href="https://www.capareseau.fr/region/${esc(p.r)}?postCode=${encodeURIComponent(p.c)}" target="_blank" rel="noopener">Fiche Capareseau</a>${p.moved ? `<button type="button" class="linkbtn reset">Rétablir la position Capareseau</button>` : ""}<span class="pm">màj ${esc(p.up || "—")}</span></div>${etfLine(p)}`;
       li.querySelector(".reset")?.addEventListener("click", (e) => { e.stopPropagation(); setPosteLatLng(p, null); });
       li.querySelector(".rep").addEventListener("click", (e) => { e.stopPropagation(); report(idx, e.currentTarget); });
       li.addEventListener("click", (e) => { if (e.target.closest("a, button")) return; select(idx); });
@@ -393,7 +446,7 @@
       postes: state.results.map((r) => {
         const p = r.p, cap = capOf(p);
         return { nom: p.n, code: p.c, r: p.r, grd: [p.g1 || "RTE", p.g2].filter(Boolean).join(" / "), ht: p.ht, pj: p.pj, up: p.up, moved: !!p.moved,
-          lat: p.lat, lon: p.lon, v: p.v, cap, cls: capClass(cap, pr.p), d: r.d, route: r.route, routeSrc: r.routeSrc, routeGeom: r.routeGeom, cost: costFor(r, pr) };
+          lat: p.lat, lon: p.lon, v: p.v, cap, cls: capClass(cap, pr.p), d: r.d, route: r.route, routeSrc: r.routeSrc, routeGeom: r.routeGeom, cost: costFor(r, pr), etf: etfOf(p) };
       }),
       projets: state.projects.map((x) => ({ label: x.label, kind: x.kind, n: x.n, t: x.t, mw: x.mw, mwh: x.mwh, st: x.st, pr: x.pr, date: x.d, com: x.com, dep: x.dep,
         d: x.d0, dP: x.dP, lat: x.lat, lon: x.lon, same: x.same, geo: x.geo, rac: x.rac.map((r) => r.n + (r.km ? ` (${fmt(r.km, 0)} km)` : "")), src: x.src })),
@@ -608,7 +661,7 @@
     if (!p.rac.length) return p.raw && p.raw.length ? `<div class="rac">Poste cité, absent de Capareseau : ${esc(p.raw.join(", "))}</div>` : `<div class="rac pm">Poste de raccordement non indiqué dans les documents lus</div>`;
     return `<div class="rac">Raccordement envisagé : ${p.rac.map((r, i) => `<b class="${r.k === selKey ? "hit" : ""}">${esc(r.n)}</b>${r.km ? ` (${fmt(r.km, 0)} km)` : ""}${p.rac.length > 1 && i === 0 ? "" : ""}`).join(p.rac.length > 1 ? " ou " : "")}${p.rac.length > 1 ? " (options)" : ""}</div>`;
   }
-  function projTip(p, selKey) {
+  function projTip(p, selKey, inPopup) {
     const ty = p.t.map((t) => `<span class="tchip t-${t}">${TYPES[t]}</span>`).join("");
     return `<div class="ptip-in${p.same ? " same" : ""}">
       ${p.same ? `<div class="flag">Raccordement envisagé sur le poste étudié</div>` : ""}
@@ -618,10 +671,19 @@
       ${racHtml(p, selKey)}
       ${p.x ? `<div class="x">${esc(p.x.slice(0, 260))}</div>` : ""}
       <div class="pm">${km(p.d0)} du site${Number.isFinite(p.dP) ? ` · ${km(p.dP)} du poste étudié` : ""}${p.geo === "c" ? " · position approximative (centre de la commune)" : ""}${p.src.length ? " · " + esc(p.src.join(", ")) : ""}</div>
+      ${!inPopup && docsOf(p).length ? `<div class="pm dhint">${docsOf(p).length} document${docsOf(p).length > 1 ? "s" : ""} : cliquer pour la liste</div>` : ""}
     </div>`;
   }
+  const SRC_LABEL = { PE: "projets-environnement.gouv.fr", MRAe: "MRAe", "Préfecture": "Préfecture" };
+  const docsOf = (p) => (p.dl && p.dl.length ? p.dl : (p.l || []).map(([t, u]) => [t, u, (p.src || [])[0] || ""]));
+  function fmtKo(ko) { return !ko ? "" : ko >= 1024 ? fmt(ko / 1024, ko >= 10240 ? 0 : 1) + " Mo" : fmt(ko, 0) + " ko"; }
   function projPopup(p, selKey) {
-    return projTip(p, selKey) + `<div class="plinks">${(p.l || []).map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(" · ")}</div>`;
+    const docs = docsOf(p);
+    const groups = {};
+    for (const d of docs) (groups[d[2] || ""] = groups[d[2] || ""] || []).push(d);
+    const html = Object.entries(groups).map(([src, ds]) => `<div class="dsrc">${esc(SRC_LABEL[src] || src || "Source")}</div><ul>${ds.map(([t, u, , ko]) =>
+      `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>${ko ? ` <span class="pm">${fmtKo(ko)}</span>` : ""}</li>`).join("")}</ul>`).join("");
+    return projTip(p, selKey, true) + (docs.length ? `<div class="pdocs"><div class="dh">Documents trouvés (${docs.length})</div>${html}</div>` : `<div class="pm">Aucun document en ligne trouvé.</div>`);
   }
   function drawProjects(A) {
     lyrProj.clearLayers(); lyrRadius.clearLayers();
@@ -639,7 +701,7 @@
         icon: L.divIcon({ className: "", html: `<div class="pin-p t-${t0}${p.same ? " same" : ""}${man ? " man" : ""}${p.geo === "c" ? " approx" : ""}"><span>${p.same ? "⚡" : ""}</span></div>`, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),
         zIndexOffset: p.same ? 400 : 0, keyboard: false,
       }).bindTooltip(projTip(p, selKey), { direction: "top", offset: [0, -sz / 2], className: "ptip", opacity: 1 })
-        .bindPopup(projPopup(p, selKey), { maxWidth: 340 }).addTo(lyrProj);
+        .bindPopup(projPopup(p, selKey), { maxWidth: 380, className: "ppop" }).addTo(lyrProj);
     }
     state.projects.slice(0, 80).forEach((p) => {
       const li = document.createElement("li");
@@ -742,7 +804,7 @@
   ["#p", "#n", "#minCap", "#withCap", "#withRte"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (s === "#p") drawAllPostes(); analyse(false); }));
   $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
   ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
-  ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
+  ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) { loadProjects(); renderPrives(); } }));
   ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
   // enregistrement des positions corrigées dans le dépôt (js/editor.js)
   function localChanges() {
@@ -800,6 +862,24 @@
       state.projMeta = state.collected.length ? pm : null;
     } catch (_) {}
     try {
+      const [etf, pv] = await Promise.all([
+        fetch("data/etf.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        fetch("data/postes-prives.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      state.etf = etf && etf.postes ? etf : null;
+      state.prives = pv && Array.isArray(pv.postes) ? pv.postes : [];
+      // postes privés connus ajoutés à la main : data/postes-prives-locaux.geojson
+      const gl = await fetch("data/postes-prives-locaux.geojson").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      for (const [i, f] of (gl?.features || []).entries()) {
+        const g = f.geometry, pp = f.properties || {};
+        if (!g || g.type !== "Point") continue;
+        const kv = String(pp.tension_kv ?? "").split(/[;,/ ]+/).map(Number).filter((x) => x > 0);
+        state.prives.push({ id: "l" + i, loc: true, n: pp.nom || null, op: pp.exploitant || null, own: null, kv, t: /indus|client/i.test(pp.type || "") ? "ind" : "prod",
+          lat: g.coordinates[1], lon: g.coordinates[0], start: pp.mise_en_service || null, x: pp.commentaire || null, src: /^https?:/.test(pp.source || "") ? pp.source : null });
+      }
+      state.privMeta = pv ? pv.meta : null;
+    } catch (_) {}
+    try {
       const gj = await fetch("data/projets-locaux.geojson").then((r) => (r.ok ? r.json() : null));
       state.localProj = (gj?.features || []).map((f) => featureToProj(f, "local")).filter(Boolean);
     } catch (_) {}
@@ -809,10 +889,14 @@
     $("#meta").innerHTML = `<p>${m ? m.nb_postes.toLocaleString("fr-FR") : state.postes.length} postes · extraction Capareseau du ${m ? new Date(m.extraction).toLocaleDateString("fr-FR") : "—"}${regs.length ? ` (données régionales mises à jour entre le ${new Date(regs[0]).toLocaleDateString("fr-FR")} et le ${new Date(regs[regs.length - 1]).toLocaleDateString("fr-FR")})` : ""}. Corse et outre-mer non couverts par les S3REnR.${Object.keys(state.corrRepo).length ? ` ${Object.keys(state.corrRepo).length} position(s) de poste corrigée(s) dans le dépôt.` : ""}</p>
       ${state.projMeta ? `<p>Projets voisins : collecte du ${new Date(state.projMeta.collecte).toLocaleDateString("fr-FR")} (${state.collected.length.toLocaleString("fr-FR")} projets PV, éolien et stockage depuis ${new Date(state.projMeta.depuis).getFullYear()} ; sources : projets-environnement.gouv.fr, avis MRAe, sites des préfectures). Le poste de raccordement provient des documents lus (avis, résumé non technique, avis d'enquête).</p>` : ""}
       ${state.corrError ? `<p class="notice">Le fichier data/postes-corrections.json du dépôt est illisible (${esc(state.corrError)}) : ses positions corrigées ne sont pas appliquées. Vérifiez les virgules et les accolades.</p>` : ""}
+      ${state.etf ? `<p>États techniques et financiers S3REnR (RTE) : ${state.etf.docs.length} documents régionaux lus le ${frDate(state.etf.maj)}, ${Object.keys(state.etf.postes).length.toLocaleString("fr-FR")} postes cités.</p>` : ""}
+      ${state.privMeta ? `<p>Postes privés : ${state.privMeta.n.toLocaleString("fr-FR")} postes HTB (≥ 45 kV) exploités par des producteurs ou des industriels, relevés dans OpenStreetMap le ${frDate(state.privMeta.maj)} (recensement contributif, non exhaustif).</p>` : ""}
       <p>Sources : <a href="https://www.capareseau.fr/" target="_blank" rel="noopener">Capareseau</a> (RTE, GRD), <a href="https://www.projets-environnement.gouv.fr/" target="_blank" rel="noopener">projets-environnement.gouv.fr</a>, itinéraires <a href="https://geoservices.ign.fr/" target="_blank" rel="noopener">IGN Géoplateforme</a> (secours OSRM/OSM). Les capacités évoluent en continu : seule une demande de raccordement (PTF) engage le gestionnaire de réseau.</p>`;
     const site = readHash();
     applyCorrections();
     drawAllPostes(); // couleurs et positions selon l'URL
+    drawPrives();
+    map.on("moveend", drawPrives);
     if (site) { map.setView([site.lat, site.lon], 11); setSite(site.lat, site.lon); } else if (location.hash) writeHash();
   }
   // lien collé dans le même onglet : on réapplique tout

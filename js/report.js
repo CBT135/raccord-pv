@@ -392,7 +392,11 @@
     ];
     if (v.RTE_TVX && !/sans objet/i.test(v.RTE_TVX)) body.push(["Travaux S3REnR", { content: v.RTE_TVX, colSpan: 3 }]);
     if (v.GRD1_TVX) body.push(["Travaux GRD", { content: v.GRD1_TVX, colSpan: 3 }]);
-    table({ body, columnStyles: kvStyles });
+    const E = P.etf;
+    body.push(["ETF S3REnR (RTE)", { content: E ? `État technique et financier ${E.y} – ${E.n} : poste cité page${E.pp && E.pp.length > 1 ? "s " + E.pp.slice(0, 8).join(", ") : " " + E.p} (lien)` : "poste non cité dans les ETF publiés", colSpan: 3 }]);
+    table({ body, columnStyles: kvStyles, didDrawCell: (h) => {
+      if (E && h.section === "body" && h.row.index === body.length - 1 && h.column.index === 1) doc.link(h.cell.x, h.cell.y, h.cell.width, h.cell.height, { url: `${E.u}#page=${E.p}` });
+    } });
 
     // récapitulatif
     heading("Tableau récapitulatif des postes affichés", 45);

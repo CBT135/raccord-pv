@@ -103,7 +103,7 @@ def strip_accents(s):
 
 def norm(s):
     """Majuscules sans accents ni ponctuation ; ST/STE/MT développés ; garde les décimales."""
-    s = re.sub(r"[’'`´ʼ‘]", " ", s or "")
+    s = re.sub(r"[’'`´ʼ‘\x92]", " ", s or "")
     s = strip_accents(s).upper()
     s = re.sub(r"(\d),(\d)", r"\1.\2", s)
     s = re.sub(r"[^A-Z0-9.]+", " ", s)
@@ -407,12 +407,33 @@ def commune_dep_from(text):
 
 # ---------------------------------------------------------------- sources
 PE_API = "https://www.projets-environnement.gouv.fr/api/explore/v2.1/catalog/datasets/projets-environnement-diffusion"
+PE_DOCS = [  # champs « documents » d'un dossier projets-environnement, dans l'ordre d'affichage
+    ("dc_relation_expertise_avisae", "Avis de l'autorité environnementale"), ("dc_relation_expertise_reponseavisae", "Réponse du maître d'ouvrage à l'avis AE"),
+    ("dc_relation_synthesis", "Résumé non technique"), ("dc_relation_expertise_etudeimpact", "Étude d'impact"),
+    ("dc_relation_expertise_autreavis", "Autre avis"), ("dc_relation_expertise_autredoc1", "Autre document"), ("dc_relation_expertise_autredoc2", "Autre document"),
+    ("dc_relation_expertise_autredoc3", "Autre document"), ("dc_relation_extension_plan", "Plans"), ("dc_relation_extension_erc", "Mesures ERC"),
+    ("dc_relation_extension_biodiv", "Biodiversité"), ("dc_relation_extension_photos", "Photos"), ("dc_relation_expertise_certifbiodiv", "Certificat biodiversité"),
+    ("dc_relation_officialdocument", "Document officiel"), ("dc_relation_assessment", "Rapport et conclusions du commissaire enquêteur"),
+    ("dc_relation_verbatim", "Bilan de la participation"), ("dc_relation_decision", "Décision"), ("dc_relation", "Document"),
+    ("dc_relation_informationnote", "Note d'information / page préfecture"), ("dc_relation_websitedebate", "Site de la consultation"),
+    ("dc_relation_websiteowner", "Site du maître d'ouvrage"),
+]
+
+
+def pe_docs(x):
+    out = []
+    for f, lab in PE_DOCS:
+        for u in re.split(r"[\s;|]+", str(x.get(f) or "")):
+            if u.startswith("http"):
+                out.append((lab, u, None))
+    return out
 
 
 def src_pe(geo):
     sel = ",".join(["dc_title", "descriptif_du_projet", "dc_subject_category", "dc_subject_theme", "dc_type", "vp_status", "dc_date", "dateouverture", "datefermeture",
                     "dc_location", "geo_point_2d", "dc_relation_decision", "dc_relation_expertise_avisae", "dc_relation_synthesis", "dc_relation_informationnote",
-                    "dc_relation_websitedebate", "dc_relation_expertise_etudeimpact", "recordsid", "location_ville", "codepostal"])
+                    "dc_relation_websitedebate", "dc_relation_expertise_etudeimpact", "recordsid", "location_ville", "codepostal"] + [f for f, _ in PE_DOCS if f not in (
+                    "dc_relation_decision", "dc_relation_expertise_avisae", "dc_relation_synthesis", "dc_relation_informationnote", "dc_relation_websitedebate", "dc_relation_expertise_etudeimpact")])
     url = f"{PE_API}/exports/json?" + urllib.parse.urlencode({"where": f"dc_date >= date'{CUTOFF.isoformat()}'", "select": sel})
     rows = json.loads(http(url, timeout=300))
     log(f"projets-environnement : {len(rows)} dossiers depuis {CUTOFF}")
@@ -456,6 +477,7 @@ def src_pe(geo):
             "d": (x.get("dc_date") or "")[:10], "st": st, "pr": ", ".join(x.get("dc_type") or []),
             "docs": [(l, u) for l, u in docs if u and u.startswith("http")],
             "links": [(l, u) for l, u in links if u and u.startswith("http")],
+            "all": pe_docs(x),
         })
     log(f"  dont projets d'injection (PV, éolien, stockage) : {len(out)}")
     return out
@@ -526,8 +548,10 @@ def src_novae(geo, cache):
             if not g or not in_metro(g[0], g[1]):
                 continue
             atts = att_cache.get(str(x["documentId"])) or []
-            docs, links = [], []
+            docs, links, alld = [], [], []
             for folder, aid, name, size in atts:
+                alld.append((f"{folder or 'Document'} – {name}" if name and norm(name) != norm(folder) else (folder or name or "Document"),
+                             f"{NOVAE[:-4]}documents/{aid}/document.pdf", round(size / 1024) if size else None))
                 f = norm(folder)
                 u = f"{NOVAE[:-4]}documents/{aid}/document.pdf"
                 if re.search(r"AVIS|DECISION", f):
@@ -537,11 +561,12 @@ def src_novae(geo, cache):
                     docs.append(("Résumé non technique", u))
                     links.append(("Résumé non technique", u))
             links.append(("Fiche NOVAE", f"https://evaluation-environnementale.ecologie.gouv.fr/publication/view-document/{x['documentId']}"))
+            alld.append(("Fiche de publication (NOVAE)", links[-1][1], None))
             out.append({
                 "src": "MRAe", "id": f"novae:{x['documentId']}", "n": (x.get("projectTitle") or "").strip(), "t": ty, "desc": "",
                 "lat": g[0], "lon": g[1], "geo": "c", "insee": g[2], "com": g[3], "dep": g[4] or dep,
                 "d": (x.get("publishedDate") or "")[:10], "st": f"{label} – {x.get('documentStatus') or ''}".strip(" –"), "pr": label,
-                "docs": docs[:2], "links": links[:4],
+                "docs": docs[:2], "links": links[:4], "all": alld,
             })
     return out
 
@@ -616,6 +641,7 @@ def src_mrae(geo, years=("2022", "2023", "2024", "2025")):
                     "lat": g[0], "lon": g[1], "geo": "c", "insee": g[2], "com": g[3], "dep": g[4],
                     "d": fr_date(txt) or f"{year}-06-30", "st": "Absence d'avis MRAe" if sans_avis else "Avis MRAe publié", "pr": "Avis MRAe",
                     "docs": [("Avis MRAe", pdf)] if pdf else [], "links": ([("Avis MRAe", pdf)] if pdf else []) + [(f"MRAe {region}", MRAE + h)],
+                    "all": ([("Avis MRAe", pdf, None)] if pdf else []) + [(f"Liste des avis MRAe {region} {year}", MRAE + h, None)],
                 })
             log(f"MRAe {region} : {len(entries)} avis, {n_ok} projets d'injection")
     return out
@@ -736,7 +762,7 @@ def pref_dept(geo, pc, dep, dom, deadline=None):
                 continue
             key = href
             ent = pc.get(key)
-            if not ent or ent.get("d") != d:
+            if not ent or ent.get("d") != d or "all" not in ent:
                 try:
                     soup = BeautifulSoup(http(href, timeout=40, tries=2), "html.parser")
                 except Exception as e:
@@ -744,7 +770,7 @@ def pref_dept(geo, pc, dep, dom, deadline=None):
                     continue
                 main = soup.select_one("main") or soup
                 text = re.sub(r"\s+", " ", main.get_text(" ", strip=True))[:6000]
-                docs = []
+                docs, alld, seen_h = [], [], set()
                 for a in main.select("a[href]"):
                     lab = a.get_text(" ", strip=True)
                     h = a["href"]
@@ -754,13 +780,18 @@ def pref_dept(geo, pc, dep, dom, deadline=None):
                     size = None
                     if ms:
                         size = float(ms.group(1).replace(",", ".")) * (1 if ms.group(2).lower().startswith("m") else 1 / 1024)
+                    hu = urllib.parse.urljoin(base, h)
+                    if hu not in seen_h:
+                        seen_h.add(hu)
+                        clean = re.sub(r"\s*-?\s*(?:format\s*)?(?:pdf|zip|docx?|odt)?\s*[-–]?\s*\d+(?:[.,]\d+)?\s*(?:Mb|Mo|Kb|Ko)\b.*$", "", re.sub(r"^Télécharger\s*", "", lab), flags=re.I).strip(" -–")
+                        alld.append([(clean or lab or "Document")[:140], hu, round(size * 1024) if size else None])
                     nl = norm(lab)
                     rank = next((r for rx, r in DOC_RANK if rx.search(nl)), None)
                     if rank is None or (size and size > MAX_PDF / 1024 / 1024):
                         continue
                     docs.append([rank, re.sub(r"^Télécharger\s*", "", lab)[:120], urllib.parse.urljoin(base, h)])
                 docs.sort(key=lambda x: x[0])
-                ent = {"d": d, "title": title, "text": text, "docs": [x[1:] for x in docs[:3]]}
+                ent = {"d": d, "title": title, "text": text, "docs": [x[1:] for x in docs[:3]], "all": alld[:60]}
                 pc[key] = ent
             text = ent["text"]
             nt = norm(ent["title"] + " " + text)
@@ -788,6 +819,7 @@ def pref_dept(geo, pc, dep, dom, deadline=None):
                 "lat": g[0], "lon": g[1], "geo": "c", "insee": g[2], "com": g[3], "dep": dep,
                 "d": ent["d"] or "", "st": st, "pr": proc,
                 "docs": [(l, u) for l, u in ent["docs"][:2]], "links": [("Page préfecture", href)] + [(l, u) for l, u in ent["docs"][:2]],
+                "all": [("Page de la préfecture", href, None)] + [tuple(x) for x in ent.get("all", [])],
             })
         st = {"resultats": len(cards), "projets": kept, **({"erreur": err} if err and not cards else {})}
         log(f"Préfecture {dep} ({dom}) : {len(cards)} résultats, {kept} projets d'injection{' – ' + err if err and not cards else ''}")
@@ -910,6 +942,12 @@ def merge(projects):
                 if u not in seenu:
                     seenu.add(u); links.append((l, u))
         m["links"] = links[:7]
+        alld, seenu = [], set()
+        for p in g:
+            for l, u, ko in (p.get("all") or [(l, u, None) for l, u in p["links"]]):
+                if u not in seenu:
+                    seenu.add(u); alld.append((l, u, p["src"], ko))
+        m["all"] = alld
         m["ids"] = [p["id"] for p in g]
         out.append(m)
     return out
@@ -964,7 +1002,8 @@ def main():
             r = srcc.get(name, [])
             if name == "pref":
                 meta["prefectures"] = {d: cache.get("pref_stats", {}).get(d) for d in PREF_DOMAINS}
-        projects += [dict(p, docs=[tuple(x) for x in p["docs"]], links=[tuple(x) for x in p["links"]]) for p in r]
+        projects += [dict(p, docs=[tuple(x) for x in p["docs"]], links=[tuple(x) for x in p["links"]],
+                         all=[tuple(x) for x in p["all"]] if p.get("all") else None) for p in r]
         meta["sources"][name] = len(r)
     log(f"Total avant lecture des documents : {len(projects)} ({time.time() - t0:.0f} s)")
 
@@ -1002,6 +1041,7 @@ def main():
             "id": i, "n": m["n"], "t": m["t"], "mw": round(m["mw"], 2) if m.get("mw") else None, "mwh": round(m["mwh"], 1) if m.get("mwh") else None,
             "lat": round(m["lat"], 5), "lon": round(m["lon"], 5), "geo": m["geo"], "com": m.get("com"), "dep": m.get("dep"),
             "d": m.get("d"), "st": m.get("st"), "pr": m.get("pr"), "src": m["src"], "l": [[l, u] for l, u in m["links"]],
+            "dl": [[l, u, s, ko] if ko else [l, u, s] for l, u, s, ko in m["all"]],
             "rac": rac, "x": (m.get("x") or "")[:260] or None, "raw": m.get("raw") or [],
         })
     c = Counter()
