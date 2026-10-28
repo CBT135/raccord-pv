@@ -1,0 +1,56 @@
+name: ETF S3REnR et postes privés
+
+on:
+  schedule:
+    - cron: "41 4 5 * *"   # le 5 de chaque mois, 04:41 UTC
+  workflow_dispatch:
+    inputs:
+      what:
+        description: "Jeux à mettre à jour (etf prives)"
+        default: "etf prives"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: references
+  cancel-in-progress: false
+
+jobs:
+  refs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Outils
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+          pip install -q beautifulsoup4==4.12.3
+      - name: Collecte
+        run: |
+          set -o pipefail
+          python3 scripts/collect_refs.py ${{ inputs.what || 'etf prives' }} 2>&1 | tee refs.log
+      - name: Enregistrer
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/etf.json data/postes-prives.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "Aucun changement."; exit 0; fi
+          git commit -q -m "ETF S3REnR et postes privés : mise à jour du $(date -u +%Y-%m-%d)"
+          git pull -q --rebase && git push -q
+      - name: Journal (branche refs-journal)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/journal && cp refs.log /tmp/journal/ 2>/dev/null || true
+          cp data/etf.json data/postes-prives.json /tmp/journal/ 2>/dev/null || true
+          cd /tmp/journal && git init -q && git checkout -q -b refs-journal
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "Journal ${{ github.run_id }}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" refs-journal

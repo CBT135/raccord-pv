@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""Données de référence complémentaires de Raccord PV.
+
+  etf     : pour chaque poste Capareseau, dernier « État technique et financier » (ETF)
+            du S3REnR publié par RTE qui cite le poste (lien PDF + page).
+            -> data/etf.json
+  prives  : postes HTB privés (producteurs, industriels) recensés dans OpenStreetMap,
+            hors postes RTE et gestionnaires de réseau de distribution.
+            -> data/postes-prives.json
+
+Usage : python3 scripts/collect_refs.py [etf] [prives]
+"""
+import datetime as dt, json, os, re, subprocess, sys, tempfile, urllib.parse, urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import collect_projets as cp  # noqa: E402  (norm, Postes, http, log)
+
+DATA = cp.DATA
+log = cp.log
+
+# ------------------------------------------------------------------ ETF S3REnR
+RTE = "https://www.rte-france.com/projets/schemas-regionaux-s3renr/raccordement-energies-renouvelables-"
+REGION_PAGES = {  # code région Capareseau -> page régionale RTE
+    "84": "auvergne-rhone-alpes", "27": "bourgogne-franche-comte", "53": "bretagne", "24": "centre-val-loire",
+    "44": "grand-est", "32": "hauts-de-france", "11": "ile-de-france", "28": "normandie",
+    "75": "nouvelle-aquitaine", "52": "pays-loire", "93": "paca",
+}
+A = "https://assets.rte-france.com/prod/public/pdf/web_download/public/"
+# Relevé du 28/10/2026 ; complété automatiquement par la lecture des pages régionales quand elles répondent.
+KNOWN = [
+    ("84", 2025, "Auvergne-Rhône-Alpes", A + "2026-06/2026-06-17-etat-technique-financier-aura-2025.pdf"),
+    ("84", 2024, "Auvergne-Rhône-Alpes", A + "2025-06/2025-06-30-etat-technique-financier-aura-2024.pdf"),
+    ("27", 2025, "Bourgogne-Franche-Comté", A + "2026-05/2026-05-18-etat-technique-financier-2025-bourgogne-franche-comte.pdf"),
+    ("27", 2024, "Bourgogne-Franche-Comté", A + "2025-06/2025-06-24-etat-technique-financier-2024-bourgogne-franche-comte.pdf"),
+    ("53", 2025, "Bretagne", A + "2026-05/2026-05-12-etf-bretagne.pdf"),
+    ("53", 2024, "Bretagne", A + "2025-08/2025-08-05-etat-technique-financier-2024-bretagne.pdf"),
+    ("24", 2025, "Centre-Val de Loire", A + "2026-08/2026-08-27-etat-technique-et-financier-2025-centre-val-de-loire.pdf"),
+    ("44", 2025, "Grand Est", A + "2026-05/2026-05-20-etat-technique-financier-grand-est.pdf"),
+    ("32", 2025, "Hauts-de-France", A + "2026-04/2026-04-30-etat-technique-financier-hdf-2025.pdf"),
+    ("32", 2024, "Hauts-de-France", A + "2025-07/2025-07-03-etat-technique-financier-hdf-2024_0.pdf"),
+    ("11", 2025, "Île-de-France", A + "2026-09/2026-09-10-etat-technique-financier-2025-idf.pdf"),
+    ("11", 2024, "Île-de-France", A + "2025-06/2025-06-27-etat-technique-et-financier-2024-idf.pdf"),
+    ("28", 2025, "Basse-Normandie", A + "2026-09/2026-09-10-etat-technique-financier-2025-bno.pdf"),
+    ("28", 2025, "Haute-Normandie", A + "2026-09/2026-09-10-etat-technique-financier-2025-hno.pdf"),
+    ("75", 2025, "Nouvelle-Aquitaine", A + "2026-06/2026-06-23-etats-techniques-financiers-2025-s3renr-nouvelle-aquitaine.pdf"),
+    ("52", 2025, "Pays de la Loire", A + "2026-05/2026-05-12-etf-pays-de-la-loire.pdf"),
+    ("93", 2025, "Provence-Alpes-Côte d'Azur", A + "2026-06/2026-06-22-etats-techniques-financiers-2025-s3renr-paca.pdf"),
+    ("93", 2024, "Provence-Alpes-Côte d'Azur", A + "2025-06/2025-06-20-etats-techniques-financiers-2024-s3renr-paca.pdf"),
+    ("76", 2025, "Occitanie", "https://assets.rte-france.com/prod/public/2026-05/2026-05-20-etats-techniques-financiers-2025-s3renr-occitanie.pdf"),
+    ("76", 2024, "Occitanie", "https://assets.rte-france.com/prod/public/2025-06/2025-06-26-etats-techniques-financiers-2024-s3renr-occitanie.pdf"),
+]
+REGION_NAMES = {r: n for r, _, n, _ in KNOWN}
+
+
+def url_date(u):
+    m = re.search(r"/(20\d\d)-(\d\d)(?:-(\d\d))?", u)
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3) or '01'}" if m else None
+
+
+def discover():
+    """Lit les pages régionales RTE ; renvoie les ETF (PDF) trouvés, sans doublon."""
+    out = {(u): (r, y, n, u) for r, y, n, u in KNOWN}
+    for code, slug in REGION_PAGES.items():
+        try:
+            html = cp.http(RTE + slug, timeout=40, tries=2).decode("utf-8", "replace")
+        except Exception as e:
+            log(f"ETF : page {slug} illisible ({e}) ; liste connue utilisée")
+            continue
+        for m in re.finditer(r'<a[^>]+href="([^"]+\.pdf)"[^>]*>(.*?)</a>', html, re.S | re.I):
+            u, label = m.group(1), re.sub(r"<[^>]+>|\s+", " ", m.group(2)).strip()
+            if not re.search(r"tats? techniques? (et )?financiers?", label, re.I):
+                continue
+            y = re.search(r"(20\d\d)", label)
+            sub = re.search(r"(Basse|Haute)[ -]Normandie", label, re.I)
+            name = sub.group(0).replace(" ", "-").title() if sub else REGION_NAMES.get(code, slug)
+            u = urllib.parse.urljoin(RTE + slug, u)
+            if u not in out:
+                log(f"ETF : nouveau document {label} -> {u}")
+                out[u] = (code, int(y.group(1)) if y else 0, name, u)
+    return sorted(out.values(), key=lambda t: (t[0], -t[1], url_date(t[3]) or ""), reverse=False)
+
+
+def pdf_pages(url):
+    data = cp.http(url, binary=True, timeout=180)
+    if not data.startswith(b"%PDF"):
+        raise ValueError("pas un PDF")
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+        f.write(data)
+        f.flush()
+        r = subprocess.run(["pdftotext", "-q", "-enc", "UTF-8", f.name, "-"], capture_output=True, timeout=300)
+    pages = r.stdout.decode("utf-8", "replace").split("\f")
+    return [" " + cp.norm(p) + " " for p in pages], len(data)
+
+
+def name_rx(key):
+    return re.compile(r"(?<![A-Z0-9])" + re.escape(key).replace(r"\ ", r"\s+") + r"(?![A-Z0-9])")
+
+
+def etf():
+    postes = cp.Postes()
+    docs = discover()
+    res, meta_docs = {}, []
+    for code, year, name, url in docs:
+        try:
+            pages, size = pdf_pages(url)
+        except Exception as e:
+            log(f"ETF {name} {year} : échec ({e})")
+            continue
+        meta_docs.append({"r": code, "y": year, "n": name, "u": url, "d": url_date(url), "pages": len(pages), "ko": size // 1024})
+        hits = 0
+        for p in postes.items:
+            if p["r"] != code:
+                continue
+            found = []
+            for key in p["keys"]:
+                if len(key) < 4 and " " not in key:
+                    continue  # nom trop court pour une recherche plein texte fiable
+                rx = name_rx(key)
+                found += [i + 1 for i, t in enumerate(pages) if rx.search(t)]
+            if not found:
+                continue
+            pg = sorted(set(found))
+            prev = res.get(p["k"])
+            cand = {"u": url, "y": year, "d": url_date(url), "n": name, "p": pg[0], "pp": pg[:12]}
+            if prev is None or (year, cand["d"] or "") > (prev["y"], prev["d"] or ""):
+                res[p["k"]] = cand
+                hits += 1
+        log(f"ETF {name} {year} : {len(pages)} pages, {hits} postes")
+    out = {"maj": dt.date.today().isoformat(), "docs": meta_docs, "postes": dict(sorted(res.items()))}
+    json.dump(out, open(os.path.join(DATA, "etf.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    log(f"ETF : {len(res)} postes reliés à un ETF")
+
+
+# ------------------------------------------------------------------ postes privés (OSM)
+OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter"]
+QUERY = """[out:json][timeout:600];
+area["ISO3166-1"="FR"][admin_level=2]->.fr;
+nwr["power"="substation"]["voltage"~"(^|;)(45000|63000|90000|150000|225000|400000)($|;)"](area.fr);
+out center tags;"""
+GRID = re.compile(r"\b(RTE|R\.T\.E|ENEDIS|ERDF|EDF(?! ?(?:RENOUVELABLES|EN\b|-?R\b))|GRDF|SICAE|REGIE|RÉGIE|GEG|SRD|GEREDIS|GÉRÉDIS|STRASBOURG|ÉLECTRICITÉ DE STRASBOURG|ELECTRICITE DE STRASBOURG|ES RESEAUX|URM|SEOLIS|SÉOLIS|ENERGIS|COMPAGNIE NATIONALE DU RHONE|SOREA|SER |RESEAU DE TRANSPORT|RÉSEAU DE TRANSPORT|GAZELEC)\b", re.I)
+RAIL = re.compile(r"SNCF|RFF|R[ée]seau ferr|RATP|TRAMWAY|M[ée]tro", re.I)
+PROD = re.compile(r"[ée]olien|solaire|photovolta|parc |centrale|wind|solar|neoen|valorem|engie|total|q ?energy|boralex|voltalia|urbasolar|edf renouvelables|edf-r|akuo|cnr|tenergie|baywa|iberdrola|enercoop|rwe|abo |vsb|wpd|eole|res |innovent|ostwind|enertrag|eurocape|elicio|tse|arkolia|langa|valeco|amarenco|apex", re.I)
+
+
+def overpass():
+    last = None
+    for ep in OVERPASS:
+        try:
+            req = urllib.request.Request(ep, data=urllib.parse.urlencode({"data": QUERY}).encode(),
+                                         headers={"User-Agent": "raccord-pv/1.0 (github.com/cbt135/raccord-pv)"})
+            with urllib.request.urlopen(req, timeout=700) as r:
+                return json.load(r)["elements"]
+        except Exception as e:
+            last = e
+            log(f"Overpass {ep} : {e}")
+    raise RuntimeError(f"Overpass indisponible : {last}")
+
+
+def kv(v):
+    out = []
+    for x in re.split(r"[;,]", v or ""):
+        try:
+            out.append(round(int(float(x)) / 1000))
+        except ValueError:
+            pass
+    return sorted(set(out), reverse=True)
+
+
+def prives():
+    postes = cp.Postes()
+    els = overpass()
+    log(f"OSM : {len(els)} postes HTB")
+    out = []
+    for e in els:
+        t = e.get("tags", {})
+        lat = e.get("lat") or (e.get("center") or {}).get("lat")
+        lon = e.get("lon") or (e.get("center") or {}).get("lon")
+        if lat is None:
+            continue
+        op = (t.get("operator") or "").strip()
+        own = (t.get("owner") or "").strip()
+        name = (t.get("name") or t.get("ref") or "").strip()
+        sub = t.get("substation", "")
+        who = " ".join([op, own])
+        if not op and not own and sub not in ("industrial", "generation") and not PROD.search(name):
+            continue  # sans exploitant renseigné : le plus souvent un poste RTE ou un poste source
+        if GRID.search(who) or (not who.strip() and GRID.search(name)):
+            continue
+        if RAIL.search(who) or RAIL.search(name) or sub == "traction":
+            continue
+        # déjà un poste Capareseau à moins de 400 m : on considère qu'il s'agit du même
+        if any(cp.hav((lat, lon), (p["lat"], p["lon"])) < 0.4 for p in postes.near(lat, lon, 2)):
+            continue
+        kind = "prod" if (sub == "generation" or PROD.search(who + " " + name)) else ("ind" if sub == "industrial" else "autre")
+        out.append({"id": f"{e['type'][0]}{e['id']}", "n": name or None, "op": op or own or None, "own": own if own and own != op else None,
+                    "kv": kv(t.get("voltage")), "t": kind, "sub": sub or None,
+                    "lat": round(lat, 5), "lon": round(lon, 5),
+                    "start": t.get("start_date") or None, "ref": t.get("ref:FR:RTE") or t.get("ref") or None})
+    out.sort(key=lambda x: (x["t"], x["op"] or "", x["n"] or ""))
+    meta = {"maj": dt.date.today().isoformat(), "source": "OpenStreetMap (ODbL), requête Overpass power=substation ≥ 45 kV",
+            "n": len(out), "types": {k: sum(1 for x in out if x["t"] == k) for k in ("prod", "ind", "autre")}}
+    json.dump({"meta": meta, "postes": out}, open(os.path.join(DATA, "postes-prives.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, separators=(",", ":"))
+    log(f"Postes privés : {meta}")
+
+
+if __name__ == "__main__":
+    what = sys.argv[1:] or ["etf", "prives"]
+    if "etf" in what:
+        etf()
+    if "prives" in what:
+        prives()
