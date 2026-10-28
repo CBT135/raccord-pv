@@ -33,7 +33,8 @@
     minCap: Math.max(0, num($("#minCap").value) || 0), radius: Math.min(80, Math.max(2, num($("#radius").value) || 20)),
     withCap: $("#withCap").checked, withRte: $("#withRte").checked, projYears: $("#projYears").checked,
     cMl: num($("#cMl").value) ?? 140, cMl2: num($("#cMl2").value) ?? 230,
-    pDep: Math.max(1, num($("#pDep").value) || 12), cCell: (num($("#cCell").value) ?? 90) * 1e3,
+    pDep: Math.max(1, num($("#pDep").value) || 17), cCell: (num($("#cCell").value) ?? 90) * 1e3,
+    cMlB: num($("#cMlB").value) ?? 110, cMl2B: num($("#cMl2B").value) ?? 190, cCellB: (num($("#cCellB").value) ?? 0) * 1e3,
     cPdl: (num($("#cPdl").value) ?? 180) * 1e3, kDet: num($("#kDet").value) || 1.3,
     kV: Math.min(36, Math.max(5, num($("#kV").value) || 20)), duMax: Math.max(0.5, num($("#duMax").value) || 6),
     tphi: Math.max(-1, Math.min(1, num($("#tphi").value) ?? 0)), kIz: Math.max(0.3, num($("#kIz").value) || 1),
@@ -158,9 +159,9 @@
   const URL_FIELDS = [
     ["nom", "#nom"], ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
     ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"], ["tpv", "#t_pv"], ["teol", "#t_eol"], ["tbess", "#t_bess"], ["pu", "#projUnknown"],
-    ["ml", "#cMl"], ["ml2", "#cMl2"], ["dep", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"], ["kv", "#kV"], ["du", "#duMax"], ["p240", "#p240"], ["tphi", "#tphi"], ["kiz", "#kIz"],
+    ["ml", "#cMl"], ["ml2", "#cMl2"], ["mlb", "#cMlB"], ["ml2b", "#cMl2B"], ["pcab", "#pDep"], ["cell", "#cCell"], ["cellb", "#cCellB"], ["pdl", "#cPdl"], ["k", "#kDet"], ["kv", "#kV"], ["du", "#duMax"], ["p240", "#p240"], ["tphi", "#tphi"], ["kiz", "#kIz"],
   ];
-  const COST_KEYS = ["ml", "ml2", "dep", "cell", "pdl", "k"];
+  const COST_KEYS = ["ml", "ml2", "mlb", "ml2b", "pcab", "cell", "cellb", "pdl", "k"];
   const CAB_KEYS = ["kv", "du", "tphi", "kiz", "p240"];
   const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
   function setTitle() { const n = $("#nom").value.trim(); document.title = n ? `${n} · Raccord PV` : "Raccord PV"; }
@@ -266,31 +267,34 @@
    * Chute (élévation) de tension en injection : ΔU/U = (R·P + X·Q)·L / U², P et Q triphasés par départ, U composée.
    * Q = P·tan φ (tan φ < 0 : le producteur absorbe du réactif, ce qui réduit l'élévation de tension). */
   const CABLES = [
-    { s: 240, r: 0.161, x: 0.11, iz: 375, prix: (pr) => pr.cMl, pmax: (pr) => pr.p240 }, // 240 mm² : projets ≤ 11,8 MW
-    { s: 400, r: 0.102, x: 0.105, iz: 480, prix: (pr) => pr.cMl2, pmax: () => Infinity },
+    { s: 240, r: 0.161, x: 0.11, iz: 375, prix: (pr) => pr.cMl, prixB: (pr) => pr.cMlB, pmax: (pr) => pr.p240 }, // 240 mm² : ≤ 11,8 MW par câble
+    { s: 400, r: 0.102, x: 0.105, iz: 480, prix: (pr) => pr.cMl2, prixB: (pr) => pr.cMl2B, pmax: () => Infinity },
   ];
-  // solution la moins chère (section × nombre de départs, cellules comprises) respectant chute de tension et Iz
+  /* Liaison : 17 MW au plus par câble ; au-delà, câbles doublés (parts égales), le premier au prix normal,
+   * chaque câble supplémentaire au prix « câble doublé » (110 €/m en 240 mm², 190 €/m en 400 mm²).
+   * Solution la moins chère respectant chute de tension, intensité admissible et limite du 240 mm². */
   function cableSizing(Pmw, Lkm, pr, depMin) {
     const U = pr.kV * 1e3;
     const calc = (n) => {
       const P = (Pmw * 1e6) / n, Q = P * pr.tphi, S = Math.hypot(P, Q), I = S / (Math.sqrt(3) * U);
       const rows = CABLES.map((c) => {
         const du = (100 * (c.r * P + c.x * Q) * Lkm) / (U * U);
-        const izc = c.iz * pr.kIz, prix = c.prix(pr);
-        return { s: c.s, r: c.r, x: c.x, iz: c.iz, izc, prix, du, okDu: Math.abs(du) <= pr.duMax, okI: I <= izc,
-          loss: (100 * c.r * Lkm * S * S) / (U * U) / P, cost: n * (Lkm * 1000 * prix + pr.cCell) };
-      }).map((c) => ({ ...c, okP: Pmw <= CABLES.find((k) => k.s === c.s).pmax(pr) + 1e-9 }))
-        .map((c) => ({ ...c, ok: c.okDu && c.okI && c.okP }));
+        const izc = c.iz * pr.kIz, prix = c.prix(pr), prixB = c.prixB(pr);
+        const liaison = Lkm * 1000 * (prix + (n - 1) * prixB), cells = pr.cCell + (n - 1) * pr.cCellB;
+        return { s: c.s, r: c.r, x: c.x, iz: c.iz, izc, prix, prixB, du, okDu: Math.abs(du) <= pr.duMax, okI: I <= izc,
+          okP: P / 1e6 <= c.pmax(pr) + 1e-9, loss: (100 * c.r * Lkm * S * S) / (U * U) / P, liaison, cells, cost: liaison + cells };
+      }).map((c) => ({ ...c, ok: c.okDu && c.okI && c.okP }));
       return { n, P: P / 1e6, I, rows };
     };
+    // autant de câbles que l'impose la limite par câble ; un câble de plus seulement si aucune section ne tient la chute de tension
     let best = null;
-    for (let n = depMin; n <= depMin + 6; n++) {
+    for (let n = depMin; n <= depMin + 6 && !best; n++) {
       const r = calc(n);
       for (const c of r.rows) if (c.ok && (!best || c.cost < best.best.cost)) best = { ...r, best: c };
     }
-    if (best) return { ...best, added: best.n - depMin, ref: calc(depMin) };
+    if (best) return { ...best, added: best.n - depMin, ref: calc(depMin), calc };
     const r = calc(depMin);
-    return { ...r, best: null, added: 0, fail: true, ref: r };
+    return { ...r, best: null, added: 0, fail: true, ref: r, calc };
   }
 
   function costFor(r, pr) {
@@ -299,22 +303,22 @@
     const depP = Math.ceil(pr.p / pr.pDep);
     const cab = cableSizing(pr.p, L_m / 1000, pr, depP);
     const dep = cab.fail ? depP : cab.n;
-    const prixMl = cab.best ? cab.best.prix : pr.cMl2;
-    const liaison = L_m * prixMl * dep;
-    const cell = dep * pr.cCell;
+    const prixMl = cab.best ? cab.best.prix : pr.cMl2, prixMlB = cab.best ? cab.best.prixB : pr.cMl2B;
+    const liaison = cab.best ? cab.best.liaison : L_m * (prixMl + (dep - 1) * prixMlB);
+    const cell = cab.best ? cab.best.cells : pr.cCell + (dep - 1) * pr.cCellB;
     const qpart = qp !== null ? qp * 1e3 * pr.p : NaN;
     const raccord = liaison + cell + (Number.isFinite(qpart) ? qpart : 0);
-    return { qp, L_m, dep, depP, cab, prixMl, liaison, cell, qpart, pdl: pr.cPdl, raccord, total: raccord + pr.cPdl, estimated: r.route === null };
+    return { qp, L_m, dep, depP, cab, prixMl, prixMlB, liaison, cell, qpart, pdl: pr.cPdl, raccord, total: raccord + pr.cPdl, estimated: r.route === null };
   }
 
   function cabLine(c, pr) {
     const b = c.cab.best;
-    if (!b) return `Câble : ni le 240 ni le 400 mm² ne tiennent ${fmt(pr.duMax, 1)} % de chute de tension, même avec ${c.dep + 6} départs (${fmt(Math.abs(c.cab.rows.at(-1).du), 1)} % en 400 mm² avec ${c.dep} départ${c.dep > 1 ? "s" : ""})`;
-    return `Câble ${c.dep > 1 ? c.dep + " × " : ""}3×1×${b.s} mm² Alu · ΔU ${fmt(b.du, 1)} % · ${fmt(c.cab.I, 0)} A / ${fmt(b.izc, 0)} A · pertes ${fmt(b.loss, 1)} %`;
+    if (!b) return `Câble : ni le 240 ni le 400 mm² ne tiennent ${fmt(pr.duMax, 1)} % de chute de tension, même avec ${c.dep + 6} câbles (${fmt(Math.abs(c.cab.rows.at(-1).du), 1)} % en 400 mm² avec ${c.dep} câble${c.dep > 1 ? "s" : ""})`;
+    return `Câble${c.dep > 1 ? "s " + c.dep + " × " : " "}3×1×${b.s} mm² Alu · ΔU ${fmt(b.du, 1)} % · ${fmt(c.cab.I, 0)} A / ${fmt(b.izc, 0)} A · pertes ${fmt(b.loss, 1)} %`;
   }
   function cabTitle(c, pr) {
-    return `${fmt(pr.kV, 1)} kV, ${fmt(c.cab.P, 2)} MW par départ, ${fmt(c.L_m / 1000, 2)} km, tan φ ${fmt(pr.tphi, 2)}\n` +
-      c.cab.ref.rows.map((x) => `${c.cab.ref.n} départ${c.cab.ref.n > 1 ? "s" : ""} en ${x.s} mm² : ΔU ${fmt(x.du, 2)} %${x.okDu ? "" : " (trop)"} · Iz ${fmt(x.izc, 0)} A${x.okI ? "" : " (insuffisant)"}${x.okP ? "" : ` · réservé aux projets ≤ ${fmt(pr.p240, 1)} MW`} · ${keur(x.cost)}`).join("\n");
+    return `${fmt(pr.kV, 1)} kV, ${fmt(c.cab.P, 2)} MW par câble, ${fmt(c.L_m / 1000, 2)} km, tan φ ${fmt(pr.tphi, 2)}\n` +
+      c.cab.ref.rows.map((x) => `${c.cab.ref.n} câble${c.cab.ref.n > 1 ? "s" : ""} en ${x.s} mm² : ΔU ${fmt(x.du, 2)} %${x.okDu ? "" : " (trop)"} · Iz ${fmt(x.izc, 0)} A${x.okI ? "" : " (insuffisant)"}${x.okP ? "" : ` · réservé aux projets ≤ ${fmt(pr.p240, 1)} MW`} · ${keur(x.cost)}`).join("\n");
   }
   function renderList(firstFull) {
     const pr = params();
@@ -337,8 +341,7 @@
       if (p.moved) chips.push(`<span class="chip moved">position corrigée</span>`);
       if (p.pj === "1") chips.push(`<span class="chip warn">poste en projet S3REnR</span>`);
       if (cls === "part") chips.push(`<span class="chip warn">capacité &lt; ${fmt(pr.p)} MW</span>`);
-      if (c.dep > 1) chips.push(`<span class="chip warn">${c.dep} départs HTA${c.cab.added ? " (chute de tension)" : ""}</span>`);
-      if (pr.p > 17) chips.push(`<span class="chip warn">&gt; 17 MW : raccordement HTB à étudier</span>`);
+      if (c.dep > 1) chips.push(`<span class="chip warn">câbles doublés (${c.dep} × ${fmt(c.cab.P, 1)} MW${c.cab.added ? ", chute de tension" : ""})</span>`);
       const gm = `https://www.google.com/maps/dir/?api=1&origin=${state.site.lat},${state.site.lon}&destination=${p.lat},${p.lon}&travelmode=walking`;
       const tvx = v.RTE_TVX && !/sans objet/i.test(v.RTE_TVX) ? `<div class="tvx">Travaux S3REnR : ${esc(v.RTE_TVX)}</div>` : "";
       li.innerHTML = `
@@ -355,9 +358,9 @@
         ${tvx}
         <div class="cost">
           <div class="row"><span>Quote-part S3REnR (${fmt(pr.p)} MW)</span><b>${keur(c.qpart)}</b></div>
-          <div class="row"><span>Liaison HTA ${c.dep > 1 ? c.dep + " × " : ""}${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.prixMl, 0)} €/m</span><b>${keur(c.liaison)}</b></div>
+          <div class="row"><span>Liaison HTA ${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.prixMl, 0)} €/m${c.dep > 1 ? ` + ${c.dep > 2 ? c.dep - 1 + " × " : ""}${fmt(c.prixMlB, 0)} €/m (câble doublé)` : ""}</span><b>${keur(c.liaison)}</b></div>
           <div class="cab${c.cab.fail ? " fail" : ""}" title="${esc(cabTitle(c, pr))}">${cabLine(c, pr)}</div>
-          <div class="row"><span>Cellule${c.dep > 1 ? "s" : ""} départ poste source</span><b>${keur(c.cell)}</b></div>
+          <div class="row"><span>Cellule départ poste source</span><b>${keur(c.cell)}</b></div>
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
           <div class="row"><span>+ poste de livraison</span><b>${keur(c.total)}</b></div>
         </div>
@@ -394,7 +397,7 @@
         d: x.d0, dP: x.dP, lat: x.lat, lon: x.lon, same: x.same, geo: x.geo, rac: x.rac.map((r) => r.n + (r.km ? ` (${fmt(r.km, 0)} km)` : "")), src: x.src })),
       zone: (() => { const A = projArea(); return { R: A.R, centers: A.centers, rings: unionRings(A.centers, A.R) }; })(),
       projMeta: state.projMeta,
-      cableAt: (n) => { const r = state.results[idx]; const c = costFor(r, pr); return cableSizing(pr.p, c.L_m / 1000, pr, n).ref.rows; },
+      cableAt: (n) => { const r = state.results[idx]; const c = costFor(r, pr); return c.cab.calc(n).rows; },
       regionNom: (code) => state.meta?.regions?.[code]?.nom || code,
       extraction: state.meta ? new Date(state.meta.extraction).toLocaleDateString("fr-FR") : null,
       url: location.href,
@@ -738,7 +741,7 @@
   $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
   ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) loadProjects(); }));
-  ["#cMl", "#cMl2", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
+  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#cCellB", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
   $("#copyCorr").addEventListener("click", async () => {
     const out = {};
     for (const k of Object.keys(state.corr).sort()) out[k] = state.corr[k];
@@ -749,7 +752,7 @@
   });
   $("#copy").addEventListener("click", async () => {
     const pr = params();
-    const head = ["Rang", "Poste", "Code", "GRD", "Reste à affecter S3REnR (MW)", "Capacité réservée (MW)", "Remplissage", "Vol d'oiseau (km)", "Trajet piéton (km)", "Quote-part (k€/MW)", "Quote-part (k€)", "Liaison HTA (km)", "Départs HTA", "Câble (mm² Alu)", "Chute de tension (%)", "Courant par départ (A)", "Prix HTA (€/m)", "Liaison HTA (k€)", "Cellules (k€)", "Raccordement (k€)", "Avec poste de livraison (k€)", "Màj Capareseau"];
+    const head = ["Rang", "Poste", "Code", "GRD", "Reste à affecter S3REnR (MW)", "Capacité réservée (MW)", "Remplissage", "Vol d'oiseau (km)", "Trajet piéton (km)", "Quote-part (k€/MW)", "Quote-part (k€)", "Liaison HTA (km)", "Câbles en parallèle", "Câble (mm² Alu)", "Chute de tension (%)", "Courant par départ (A)", "Prix HTA (€/m)", "Liaison HTA (k€)", "Cellules (k€)", "Raccordement (k€)", "Avec poste de livraison (k€)", "Màj Capareseau"];
     const rows = state.results.map((r, i) => { const c = costFor(r, pr), v = r.p.v; return [i + 1, r.p.n, r.p.c, r.p.g1 || "RTE", num(v.INFO_NA), num(v.INFO_CR), v.INFO_TX || "", (r.d / 1000).toFixed(2), r.route !== null ? (r.route / 1000).toFixed(2) : "", c.qp ?? "", Math.round(c.qpart / 1e3) || "", (c.L_m / 1000).toFixed(2), c.dep, c.cab.best ? c.cab.best.s : "aucune", c.cab.best ? c.cab.best.du.toFixed(2) : "", Math.round(c.cab.I), c.prixMl, Math.round(c.liaison / 1e3), Math.round(c.cell / 1e3), Math.round(c.raccord / 1e3), Math.round(c.total / 1e3), (r.p.up || "") + (r.p.moved ? " (position corrigée)" : "")]; });
     const title = `Site ${state.site.lat.toFixed(5)}, ${state.site.lon.toFixed(5)} — ${fmt(pr.p)} MW — ${fmt(pr.kV, 1)} kV, chute de tension max ${fmt(pr.duMax, 1)} %, tan φ ${fmt(pr.tphi, 2)} — 240 mm² ${pr.cMl} €/m, 400 mm² ${pr.cMl2} €/m, ${pr.cCell / 1e3} k€/cellule, ${pr.cPdl / 1e3} k€/poste de livraison, ${pr.pDep} MW/départ`;
     const tsv = [title, head.join("\t"), ...rows.map((r) => r.map((x) => String(x).replace(".", ",")).join("\t"))].join("\n");
