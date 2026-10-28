@@ -886,7 +886,7 @@ def merge(projects):
         m["d"] = max((p.get("d") or "") for p in g)
         best = max(g, key=lambda p: (p.get("d") or ""))
         m["st"] = best["st"]
-        m["pr"] = " · ".join(dict.fromkeys(p["pr"] for p in g if p.get("pr")))
+        m["pr"] = " · ".join(dict.fromkeys(x.strip() for p in g for x in (p.get("pr") or "").split(",") if x.strip() and x.strip() != "Autre"))
         m["mw"] = next((p["mw"] for p in g if p.get("mw")), None)
         m["mwh"] = next((p["mwh"] for p in g if p.get("mwh")), None)
         rac, seen = [], set()
