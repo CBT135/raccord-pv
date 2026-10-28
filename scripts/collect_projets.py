@@ -335,6 +335,14 @@ class Geo:
             self.c[key] = res
         return res
 
+    def warm(self, pairs, workers=8):
+        """Géocode en parallèle une liste de (nom, département) avant les boucles séquentielles."""
+        todo = list({(n, d) for n, d in pairs if n and f"{d or ''}|{norm(n)}" not in self.c})
+        if todo:
+            log(f"  géocodage de {len(todo)} communes")
+            with cf.ThreadPoolExecutor(workers) as ex:
+                list(ex.map(lambda nd: self.commune(*nd), todo))
+
     def postcode(self, cp):
         key = f"cp|{cp}"
         if key in self.c:
@@ -394,6 +402,8 @@ def src_pe(geo):
     url = f"{PE_API}/exports/json?" + urllib.parse.urlencode({"where": f"dc_date >= date'{CUTOFF.isoformat()}'", "select": sel})
     rows = json.loads(http(url, timeout=300))
     log(f"projets-environnement : {len(rows)} dossiers depuis {CUTOFF}")
+    geo.warm([(str(x["location_ville"]).split(",")[0], (re.match(r"\s*(\d{2}|2A|2B)", x.get("dc_location") or "") or [None, None])[1])
+              for x in rows if x.get("location_ville") and not x.get("geo_point_2d")])
     out = []
     for x in rows:
         cat = " ".join(x.get("dc_subject_category") or []) + " " + " ".join(x.get("dc_subject_theme") or [])
@@ -466,6 +476,8 @@ def src_novae(geo, cache):
                 ty = ["eol"] if "EOLIEN" in norm(x.get("domaine")) else ["pv"] if "PHOTOVOLT" in norm(x.get("domaine")) else []
             if not ty:
                 continue
+            if label.startswith("Cas par cas") and "bess" not in ty:
+                continue  # PV au sol ≥ 1 MWc et éolien relèvent de l'étude d'impact : le cas par cas ne concerne que < 1 MWc
             keep.append((x, ty))
         log(f"  dont projets d'injection : {len(keep)}")
 
@@ -483,6 +495,12 @@ def src_novae(geo, cache):
 
         with cf.ThreadPoolExecutor(6) as ex:
             list(ex.map(detail, keep))
+        pairs = []
+        for x, ty in keep:
+            m = re.match(r"\s*(.+?)\s*\((\d{2}|2A|2B)\)", x.get("municipality") or "")
+            if m:
+                pairs.append((m.group(1), m.group(2)))
+        geo.warm(pairs)
         for x, ty in keep:
             mun = x.get("municipality") or ""
             m = re.match(r"\s*(.+?)\s*\((\d{2}|2A|2B)\)", mun)
@@ -563,6 +581,7 @@ def src_mrae(geo, years=("2022", "2023", "2024", "2025")):
             cont = page.select_one(".texte-article") or page.select_one("main") or page
             entries = mrae_entries(cont)
             region = re.sub(r"^Avis rendus sur projets de la ", "", title)
+            geo.warm([commune_dep_from(re.sub(r"\s+", " ", t)) or (None, None) for t, _ in entries if types_of(t)])
             n_ok = 0
             for txt, href in entries:
                 txt = re.sub(r"\s+", " ", txt).strip()
@@ -625,12 +644,30 @@ def pref_proc(t):
     return "Publication préfecture"
 
 
-def src_pref(geo, cache, depts=None):
+def src_pref(geo, cache, depts=None, deadline=None):
     pc = cache.setdefault("pref", {})
     out, stats = [], {}
-    for dep, dom in PREF_DOMAINS.items():
-        if depts and dep not in depts:
-            continue
+    lock = threading.Lock()
+
+    def one(item):
+        dep, dom = item
+        if deadline and time.time() > deadline:
+            stats[dep] = {"reporte": "budget de temps atteint"}
+            return
+        res, st = pref_dept(geo, pc, dep, dom)
+        with lock:
+            out.extend(res)
+            stats[dep] = st
+
+    items = [(d, m) for d, m in PREF_DOMAINS.items() if not depts or d in depts]
+    with cf.ThreadPoolExecutor(8) as ex:
+        list(ex.map(one, items))
+    return out, stats
+
+
+def pref_dept(geo, pc, dep, dom):
+    out = []
+    if True:
         base = f"https://www.{dom}.gouv.fr"
         cards, err = {}, None
         for kw in PREF_KEYWORDS:
@@ -723,9 +760,9 @@ def src_pref(geo, cache, depts=None):
                 "d": ent["d"] or "", "st": st, "pr": proc,
                 "docs": [(l, u) for l, u in ent["docs"][:2]], "links": [("Page préfecture", href)] + [(l, u) for l, u in ent["docs"][:2]],
             })
-        stats[dep] = {"resultats": len(cards), "projets": kept, **({"erreur": err} if err and not cards else {})}
+        st = {"resultats": len(cards), "projets": kept, **({"erreur": err} if err and not cards else {})}
         log(f"Préfecture {dep} ({dom}) : {len(cards)} résultats, {kept} projets d'injection{' – ' + err if err and not cards else ''}")
-    return out, stats
+    return out, st
 
 
 # ---------------------------------------------------------------- lecture des documents
@@ -882,7 +919,7 @@ def main():
                 meta["sources"][name] = f"erreur : {str(e)[:120]}"
     if "pref" in only:
         try:
-            r, st = src_pref(geo, cache, depts)
+            r, st = src_pref(geo, cache, depts, t0 + a.budget_min * 60 * 0.55)
             projects += r
             meta["sources"]["pref"] = len(r)
             meta["prefectures"] = st
