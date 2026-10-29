@@ -120,6 +120,62 @@
   overlays["Projets voisins"] = lyrProj;
   L.control.layers(base, overlays, { collapsed: true }).addTo(map);
   L.control.scale({ imperial: false }).addTo(map);
+
+  /* ---------- version mobile : panneau coulissant (aperçu / moitié / plein écran) à onglets ---------- */
+  const mobile = window.matchMedia("(max-width: 760px)");
+  const panelEl = $("#panel");
+  const SHEETS = ["peek", "half", "full"];
+  function setSheet(v) { if (SHEETS.includes(v)) panelEl.dataset.sheet = v; }
+  function setTab(t) {
+    panelEl.dataset.tab = t;
+    panelEl.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    panelEl.scrollTop = 0;
+  }
+  panelEl.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+    const same = panelEl.dataset.tab === b.dataset.tab;
+    setTab(b.dataset.tab);
+    if (panelEl.dataset.sheet === "peek") setSheet("half"); else if (same) setSheet(panelEl.dataset.sheet === "half" ? "full" : "half");
+  }));
+  $("#sheetGrip").addEventListener("click", () => { if (Date.now() - (state.sheetDragEnd || 0) < 300) return; setSheet(SHEETS[(SHEETS.indexOf(panelEl.dataset.sheet) + 1) % 3]); });
+  // glisser la poignée ou les onglets vers le haut / le bas
+  (() => {
+    let y0 = null, h0 = 0, moved = false;
+    const bar = $("#sheetBar");
+    bar.addEventListener("pointerdown", (e) => { if (!mobile.matches) return; y0 = e.clientY; h0 = panelEl.getBoundingClientRect().height; moved = false; });
+    window.addEventListener("pointermove", (e) => {
+      if (y0 === null) return;
+      const dy = e.clientY - y0;
+      if (!moved && Math.abs(dy) < 8) return;
+      moved = true; panelEl.classList.add("dragging");
+      const H = panelEl.parentElement.getBoundingClientRect().height;
+      panelEl.style.height = Math.max(90, Math.min(H - 8, h0 - dy)) + "px";
+    });
+    window.addEventListener("pointerup", () => {
+      if (y0 === null) return;
+      y0 = null; panelEl.classList.remove("dragging");
+      if (!moved) return;
+      state.sheetDragEnd = Date.now();
+      const H = panelEl.parentElement.getBoundingClientRect().height, h = panelEl.getBoundingClientRect().height / H;
+      panelEl.style.height = "";
+      setSheet(h < 0.33 ? "peek" : h < 0.76 ? "half" : "full");
+    });
+  })();
+  $("#legendToggle").addEventListener("click", (e) => { const o = $("#legend").classList.toggle("open"); e.currentTarget.setAttribute("aria-expanded", String(o)); });
+  // les cadrages tiennent compte du panneau qui recouvre le bas de la carte
+  function sheetPx() {
+    if (!mobile.matches) return 0;
+    const H = panelEl.parentElement.getBoundingClientRect().height, sh = panelEl.dataset.sheet;
+    return sh === "peek" ? 128 : Math.round(H * 0.52);
+  }
+  const fitBounds0 = map.fitBounds.bind(map);
+  map.fitBounds = (b, o = {}) => fitBounds0(b, mobile.matches ? { ...o, paddingTopLeft: [16, 56], paddingBottomRight: [16, sheetPx() + 16] } : o);
+  // sur mobile, montrer la carte quand on choisit un élément de liste
+  const showMapForItem = () => { if (mobile.matches) setSheet("peek"); };
+  function tabCount(tab, n) {
+    const b = panelEl.querySelector(`.tabs button[data-tab="${tab}"]`); if (!b) return;
+    let el = b.querySelector(".n"); if (!el) { el = document.createElement("span"); el.className = "n"; b.appendChild(el); }
+    el.textContent = n ? String(n) : "";
+  }
   let siteMarker = null;
   // Carte ouverte dans un onglet masqué, rotation d'écran, redimensionnement : on remesure la carte,
   // et si elle avait une taille nulle, on recadre sur le site et les postes.
@@ -201,6 +257,7 @@
       : `<div class="pm">Aucun poste privé recensé dans ce rayon.</div>`);
     box.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
       const q = state.prives.find((x) => x.id === li.dataset.id); if (!q) return;
+      showMapForItem();
       map.setView([q.lat, q.lon], Math.max(map.getZoom(), 12));
       setTimeout(() => lyrPriv.eachLayer((l) => { const ll = l.getLatLng(); if (ll.lat === q.lat && ll.lng === q.lon) l.openPopup(); }), 300);
     }));
@@ -279,6 +336,7 @@
       siteMarker.on("dragend", () => { const ll = siteMarker.getLatLng(); setSite(ll.lat, ll.lng, true); });
     } else siteMarker.setLatLng([lat, lon]);
     writeHash();
+    if (mobile.matches) { setTab("results"); if (panelEl.dataset.sheet === "peek") setSheet("half"); }
     analyse(!fromClick);
   }
 
@@ -302,6 +360,7 @@
     $("#hint").hidden = true;
     renderList(firstFull);
     renderPrives();
+    tabCount("results", state.results.length);
     drawPostes();
     writeHash(); // inclut les positions corrigées des postes affichés
     if (fit && state.results.length) {
@@ -709,10 +768,11 @@
       li.innerHTML = `<div class="pt">${esc(p.label)} · ${esc(p.n)}</div>
         <div class="pm">${p.t.map((t) => TYPES[t]).join(" + ")} · ${fmtMW(p)} · ${esc(p.st || p.pr || "")}${p.d ? " · " + esc(p.d.slice(0, 7)) : ""} · ${km(Math.min(p.d0, p.dP))}</div>
         ${p.rac.length ? `<div class="pm">→ ${p.rac.map((r) => (r.k === selKey ? `<b>${esc(r.n)}</b>` : esc(r.n))).join(" ou ")}</div>` : ""}`;
-      li.addEventListener("click", () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 12)); lyrProj.eachLayer((l) => { if (l.getLatLng && l.getLatLng().lat === p.lat && l.getLatLng().lng === p.lon) l.openPopup(); }); });
+      li.addEventListener("click", () => { showMapForItem(); map.setView([p.lat, p.lon], Math.max(map.getZoom(), 12)); lyrProj.eachLayer((l) => { if (l.getLatLng && l.getLatLng().lat === p.lat && l.getLatLng().lng === p.lon) l.openPopup(); }); });
       ul.appendChild(li);
     });
     // bilan
+    tabCount("projects", state.projects.length);
     const pr = params(), n = state.projects.length, byT = (t) => state.projects.filter((p) => p.t.includes(t)).length;
     const sumSame = same.reduce((a, p) => a + (p.mw || 0), 0), unk = same.filter((p) => p.mw === null).length;
     const cap = A.sel ? capOf(A.sel.p) : null;

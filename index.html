@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b7285">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Raccord PV</title>
 <meta name="description" content="Pré-étude de raccordement PV : postes sources les plus proches, capacité S3REnR restant à affecter, itinéraire piéton, coût indicatif et projets en instruction.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,7 +29,15 @@
 </header>
 
 <main class="app">
-  <aside class="panel" id="panel">
+  <aside class="panel" id="panel" data-tab="results" data-sheet="peek">
+    <div class="sheet-bar" id="sheetBar">
+      <button type="button" class="grip" id="sheetGrip" aria-label="Agrandir ou réduire le panneau"><span></span></button>
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" data-tab="params">Projet</button>
+        <button type="button" role="tab" data-tab="results" aria-selected="true">Postes</button>
+        <button type="button" role="tab" data-tab="projects">Voisins</button>
+      </nav>
+    </div>
     <section class="block" id="params">
       <h2>Projet</h2>
       <div class="grid2">
@@ -82,7 +93,7 @@
       <div id="site" class="site"></div>
       <ol id="list" class="list"></ol>
       <div id="privList" class="privlist" hidden></div>
-      <p id="hint" class="hint">Cliquez sur la carte pour placer le site envisagé. Le marqueur peut ensuite être déplacé.</p>
+      <p id="hint" class="hint">Cliquez (ou touchez) la carte pour placer le site envisagé, ou cherchez une adresse. Le marqueur peut ensuite être déplacé.</p>
       <p id="dragHint" class="hint" hidden>Les postes numérotés se déplacent à la souris pour corriger leur position (vue « Photographies aériennes » dans le sélecteur de fonds) ; le trajet et le coût sont alors recalculés.</p>
     </section>
 
@@ -106,6 +117,7 @@
 
   <div class="mapwrap">
     <div id="map" role="application" aria-label="Carte : cliquer pour placer le site"></div>
+    <button type="button" class="legend-toggle" id="legendToggle" aria-expanded="false" aria-controls="legend">Légende</button>
     <div class="legend" id="legend">
       <div><i class="dot ok"></i>capacité restante ≥ puissance</div>
       <div><i class="dot part"></i>capacité partielle</div>
