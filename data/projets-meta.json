@@ -5,7 +5,7 @@
   "pe": 2636,
   "novae": 1041,
   "mrae": 1653,
-  "pref": 166
+  "pref": 219
  },
  "sources_date": {
   "pe": "2026-10-29",
@@ -107,19 +107,76 @@
    "projets": 29,
    "le": "2026-10-29"
   },
-  "19": null,
-  "21": null,
-  "22": null,
-  "23": null,
-  "24": null,
-  "25": null,
-  "26": null,
-  "27": null,
-  "28": null,
-  "29": null,
-  "30": null,
-  "31": null,
-  "32": null,
+  "19": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-29"
+  },
+  "21": {
+   "resultats": 16,
+   "projets": 3,
+   "le": "2026-10-29"
+  },
+  "22": {
+   "resultats": 24,
+   "projets": 9,
+   "le": "2026-10-29"
+  },
+  "23": {
+   "resultats": 79,
+   "projets": 15,
+   "le": "2026-10-29"
+  },
+  "24": {
+   "resultats": 4,
+   "projets": 2,
+   "le": "2026-10-29"
+  },
+  "25": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-29"
+  },
+  "26": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-29"
+  },
+  "27": {
+   "resultats": 42,
+   "projets": 0,
+   "le": "2026-10-29"
+  },
+  "28": {
+   "resultats": 53,
+   "projets": 8,
+   "le": "2026-10-29"
+  },
+  "29": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-10-29"
+  },
+  "30": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "HTTP Error 404: Not Found",
+   "le": "2026-10-29"
+  },
+  "31": {
+   "resultats": 153,
+   "projets": 3,
+   "le": "2026-10-29"
+  },
+  "32": {
+   "resultats": 20,
+   "projets": 13,
+   "le": "2026-10-29"
+  },
   "33": null,
   "34": null,
   "35": null,
@@ -183,15 +240,15 @@
   "94": null,
   "95": null
  },
- "documents_lus": 1749,
+ "documents_lus": 40,
  "documents_en_attente": 0,
  "projets": {
-  "total": 3834,
-  "avec_poste": 1995,
-  "puissance_inconnue": 1110,
+  "total": 3845,
+  "avec_poste": 1991,
+  "puissance_inconnue": 1128,
+  "pv": 2332,
   "eol": 1486,
-  "pv": 2316,
   "bess": 84
  },
- "duree_s": 5493
+ "duree_s": 3635
 }
