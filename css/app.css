@@ -277,3 +277,13 @@ a { color: var(--accent); }
   .ed-box { width: calc(100vw - 24px); }
 }
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+
+/* position GPS */
+.geo-btn { width: 36px; height: 36px; display: grid; place-items: center; background: var(--panel); color: var(--ink); border: 2px solid rgb(0 0 0 / .2); border-radius: 6px; cursor: pointer; padding: 0; }
+.geo-btn svg { width: 20px; height: 20px; }
+.geo-btn.on { color: #1c7ed6; }
+.geo-btn.wait svg { animation: geo-blink 1s ease-in-out infinite; }
+@keyframes geo-blink { 50% { opacity: .3; } }
+.pin-gps { width: 18px; height: 18px; border-radius: 50%; background: #1c7ed6; border: 3px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .3), 0 0 0 6px rgb(28 126 214 / .25); }
+.toast { position: absolute; z-index: 900; left: 50%; top: 12px; transform: translateX(-50%); max-width: min(92%, 420px); background: var(--ink); color: var(--panel); padding: 8px 12px; border-radius: 6px; font-size: 13px; box-shadow: 0 4px 16px rgb(0 0 0 / .25); }
+@media (max-width: 760px) { .geo-btn { width: 44px; height: 44px; } .geo-btn svg { width: 24px; height: 24px; } .toast { top: 56px; } }

@@ -171,6 +171,67 @@
   map.fitBounds = (b, o = {}) => fitBounds0(b, mobile.matches ? { ...o, paddingTopLeft: [16, 56], paddingBottomRight: [16, sheetPx() + 16] } : o);
   // sur mobile, montrer la carte quand on choisit un élément de liste
   const showMapForItem = () => { if (mobile.matches) setSheet("peek"); };
+
+  /* ---------- position GPS de l'utilisateur ---------- */
+  const geo = { watch: null, marker: null, circle: null, first: true, last: null };
+  function toast(msg, ms = 4000) {
+    let t = $("#toast");
+    if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.querySelector(".mapwrap").appendChild(t); }
+    t.textContent = msg; t.hidden = false; clearTimeout(t._h); t._h = setTimeout(() => (t.hidden = true), ms);
+  }
+  function geoPopup() {
+    const p = geo.last; if (!p) return "";
+    return `<b>Votre position</b><div class="pm">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)} · précision ± ${fmt(p.acc, 0)} m</div><div class="plinks"><button type="button" class="ghost geo-site">Placer le site ici</button></div>`;
+  }
+  function geoStop() {
+    if (geo.watch !== null) navigator.geolocation.clearWatch(geo.watch);
+    geo.watch = null; geo.first = true;
+    geo.marker?.remove(); geo.circle?.remove(); geo.marker = geo.circle = null;
+    geoBtn.classList.remove("on", "wait"); geoBtn.setAttribute("aria-pressed", "false");
+  }
+  function geoFix(pos) {
+    const { latitude: lat, longitude: lon, accuracy: acc } = pos.coords;
+    geo.last = { lat, lon, acc };
+    geoBtn.classList.remove("wait"); geoBtn.classList.add("on");
+    if (!geo.marker) {
+      geo.circle = L.circle([lat, lon], { radius: acc, color: "#1c7ed6", weight: 1, fillColor: "#1c7ed6", fillOpacity: 0.12, interactive: false }).addTo(map);
+      geo.marker = L.marker([lat, lon], { icon: L.divIcon({ className: "", html: '<div class="pin-gps"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1200, keyboard: false })
+        .bindPopup(geoPopup).addTo(map);
+      geo.marker.on("popupopen", (e) => e.popup.getElement().querySelector(".geo-site")?.addEventListener("click", () => {
+        map.closePopup(); setSite(geo.last.lat, geo.last.lon, false);
+      }));
+    } else { geo.marker.setLatLng([lat, lon]); geo.circle.setLatLng([lat, lon]).setRadius(acc); }
+    if (geo.first) { geo.first = false; map.setView([lat, lon], Math.max(map.getZoom(), acc > 1500 ? 12 : 15)); }
+  }
+  function geoErr(e) {
+    const msg = e.code === 1 ? "Localisation refusée : autorisez l'accès à la position pour ce site dans les réglages du navigateur."
+      : e.code === 3 ? "Position introuvable pour l'instant (délai dépassé). Réessayez à découvert." : "Position indisponible.";
+    toast(msg, 6000); geoStop();
+  }
+  const GeoCtl = L.Control.extend({
+    options: { position: "topright" },
+    onAdd() {
+      const b = L.DomUtil.create("button", "geo-btn");
+      b.type = "button"; b.title = "Afficher ma position"; b.setAttribute("aria-label", "Afficher ma position"); b.setAttribute("aria-pressed", "false");
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2"/></svg>';
+      L.DomEvent.disableClickPropagation(b);
+      return b;
+    },
+  });
+  const geoBtn = new GeoCtl().addTo(map).getContainer();
+  geoBtn.addEventListener("click", () => {
+    if (!("geolocation" in navigator)) return toast("Ce navigateur ne donne pas accès à la position.");
+    if (geo.watch !== null) {
+      // déjà actif : recentrer, ou arrêter si la carte est déjà centrée sur la position
+      const p = geo.last;
+      if (p && map.getBounds().pad(-0.3).contains([p.lat, p.lon])) return geoStop();
+      if (p) map.setView([p.lat, p.lon], Math.max(map.getZoom(), 15));
+      return;
+    }
+    geoBtn.classList.add("wait"); geoBtn.setAttribute("aria-pressed", "true");
+    showMapForItem();
+    geo.watch = navigator.geolocation.watchPosition(geoFix, geoErr, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+  });
   function tabCount(tab, n) {
     const b = panelEl.querySelector(`.tabs button[data-tab="${tab}"]`); if (!b) return;
     let el = b.querySelector(".n"); if (!el) { el = document.createElement("span"); el.className = "n"; b.appendChild(el); }
