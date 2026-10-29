@@ -28,6 +28,8 @@ jobs:
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # dernier état de main au démarrage (et non le commit du déclenchement)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -59,7 +61,8 @@ jobs:
           git add data/projets.json data/projets-meta.json data/projets-cache.json
           if git diff --cached --quiet; then echo "Aucun changement."; exit 0; fi
           git commit -q -m "Projets voisins : collecte du $(date -u +%Y-%m-%d)"
-          git pull -q --rebase && git push -q
+          # une autre tâche a pu enregistrer entre-temps : en cas de conflit, la collecte qui vient de finir l'emporte
+          for i in 1 2 3; do git pull -q --rebase -X theirs origin main && git push -q origin HEAD:main && exit 0; sleep 10; done; exit 1
       - name: Journal (branche collecte-journal)
         if: always()
         env:
