@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: "Jeux à mettre à jour (etf prives)"
-        default: "etf prives"
+        description: "Jeux à mettre à jour (etf prives positions)"
+        default: "etf prives positions"
 
 permissions:
   contents: write
@@ -34,13 +34,13 @@ jobs:
       - name: Collecte
         run: |
           set -o pipefail
-          python3 scripts/collect_refs.py ${{ inputs.what || 'etf prives' }} 2>&1 | tee refs.log
+          python3 scripts/collect_refs.py ${{ inputs.what || 'etf prives positions' }} 2>&1 | tee refs.log
       - name: Enregistrer
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/etf.json data/postes-prives.json 2>/dev/null || true
+          git add data/etf.json data/postes-prives.json data/postes.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "Aucun changement."; exit 0; fi
           git commit -q -m "ETF S3REnR et postes privés : mise à jour du $(date -u +%Y-%m-%d)"
           # une autre tâche a pu enregistrer entre-temps : en cas de conflit, la collecte qui vient de finir l'emporte

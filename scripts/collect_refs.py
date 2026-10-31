@@ -148,11 +148,12 @@ RAIL = re.compile(r"SNCF|RFF|R[ée]seau ferr|RATP|TRAMWAY|M[ée]tro", re.I)
 PROD = re.compile(r"[ée]olien|solaire|photovolta|parc |centrale|wind|solar|neoen|valorem|engie|total|q ?energy|boralex|voltalia|urbasolar|edf renouvelables|edf-r|akuo|cnr|tenergie|baywa|iberdrola|enercoop|rwe|abo |vsb|wpd|eole|res |innovent|ostwind|enertrag|eurocape|elicio|tse|arkolia|langa|valeco|amarenco|apex", re.I)
 
 
-def overpass():
+def overpass(query=None):
+    query = query or QUERY
     last = None
     for ep in OVERPASS:
         try:
-            req = urllib.request.Request(ep, data=urllib.parse.urlencode({"data": QUERY}).encode(),
+            req = urllib.request.Request(ep, data=urllib.parse.urlencode({"data": query}).encode(),
                                          headers={"User-Agent": "raccord-pv/1.0 (github.com/cbt135/raccord-pv)"})
             with urllib.request.urlopen(req, timeout=700) as r:
                 return json.load(r)["elements"]
@@ -214,9 +215,102 @@ def prives():
     log(f"Postes privés : {meta}")
 
 
+# ------------------------------------------------------------------ positions aberrantes des postes Capareseau
+# Capareseau publie pour certains postes des coordonnées inversées, fausses ou nulles (Lambert 93 (0,0) -> golfe de Guinée).
+QUERY_POS = """[out:json][timeout:600];
+area["ISO3166-1"="FR"][admin_level=2]->.fr;
+(nwr["power"="substation"]["ref:FR:RTE"](area.fr);
+ nwr["power"="substation"]["name"]["voltage"~"(^|;)(45000|63000|90000|150000|225000|400000)($|;)"](area.fr););
+out center tags;"""
+FR_BOX = (41.3, 51.2, -5.2, 9.7)
+
+
+def in_fr(lat, lon):
+    return lat is not None and lon is not None and FR_BOX[0] < lat < FR_BOX[1] and FR_BOX[2] < lon < FR_BOX[3] and not (lon > 8.0 and lat < 43.2)
+
+
+def osm_name(n):
+    n = cp.norm(n)
+    n = re.sub(r"^(POSTE (ELECTRIQUE|SOURCE|DE TRANSFORMATION|RTE)?( DE| DU| DES| D)?|SOUS STATION( DE| DU| D)?)\s+", "", n)
+    return n.strip()
+
+
+def commune_geo(name, region):
+    """Centre de la commune portant exactement le nom du poste, dans la région du poste."""
+    base = re.sub(r"\(.*?\)|\d+$", " ", name).strip()
+    m = re.match(r"^\s*(.*?)\s*\((LES|LA|LE|L)\)\s*$", name.strip(), re.I)
+    cands = [base] + ([f"{m.group(2)} {m.group(1)}"] if m else [])
+    for c in cands:
+        try:
+            js = json.loads(cp.http("https://geo.api.gouv.fr/communes?" + urllib.parse.urlencode(
+                {"nom": c, "codeRegion": region, "fields": "nom,centre,codeDepartement", "boost": "population", "limit": 5}), timeout=30))
+        except Exception as e:
+            log(f"  geo.api : {e}")
+            continue
+        for x in js:
+            if cp.norm(x["nom"]) == cp.norm(c) and x.get("centre"):
+                lon, lat = x["centre"]["coordinates"]
+                return lat, lon, x["nom"]
+    return None
+
+
+def positions():
+    path = os.path.join(DATA, "postes.json")
+    postes = json.load(open(path, encoding="utf-8"))
+    bad = [p for p in postes if not in_fr(p["lat"], p["lon"]) or p.get("pos")]
+    log(f"Positions : {len(bad)} postes hors de France ou déjà repositionnés")
+    if not bad:
+        return
+    try:
+        els = overpass(QUERY_POS)
+    except Exception as e:
+        log(f"Overpass indisponible ({e}) : seules l'inversion et la commune sont essayées")
+        els = []
+    by_ref, by_name = {}, {}
+    for e in els:
+        t = e.get("tags", {})
+        lat = e.get("lat") or (e.get("center") or {}).get("lat")
+        lon = e.get("lon") or (e.get("center") or {}).get("lon")
+        if lat is None:
+            continue
+        if t.get("ref:FR:RTE"):
+            by_ref.setdefault(t["ref:FR:RTE"].strip().upper(), []).append((lat, lon))
+        if t.get("name"):
+            by_name.setdefault(osm_name(t["name"]), []).append((lat, lon))
+    n = {"inversion": 0, "osm": 0, "commune": 0, "inconnue": 0}
+    for p in bad:
+        lat0, lon0 = p.get("olat", p["lat"]), p.get("olon", p["lon"])
+        p["olat"], p["olon"] = lat0, lon0  # coordonnées publiées par Capareseau, gardées pour mémoire
+        res = None
+        if in_fr(lon0, lat0):
+            res = (lon0, lat0, "inversion")
+        if not res and p["c"].upper() in by_ref and len(by_ref[p["c"].upper()]) >= 1:
+            la, lo = by_ref[p["c"].upper()][0]
+            res = (la, lo, "osm")
+        if not res:
+            keys = {osm_name(k) for k in cp.Postes.keys(p["n"])}
+            hits = [ll for k in keys for ll in by_name.get(k, [])]
+            if len({(round(a, 2), round(b, 2)) for a, b in hits}) == 1:
+                res = (hits[0][0], hits[0][1], "osm")
+        if not res:
+            c = commune_geo(p["n"], p["r"])
+            if c:
+                res = (c[0], c[1], "commune")
+        if res and in_fr(res[0], res[1]):
+            p["lat"], p["lon"], p["pos"] = round(res[0], 5), round(res[1], 5), res[2]
+        else:
+            p["pos"] = "inconnue"
+        n[p["pos"]] += 1
+        log(f"  {p['r']}:{p['c']} {p['n']} ({lat0}, {lon0}) -> {p['pos']} ({p['lat']}, {p['lon']})")
+    log(f"Positions corrigées : {n}")
+    json.dump(postes, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+
+
 if __name__ == "__main__":
     what = sys.argv[1:] or ["etf", "prives"]
     if "etf" in what:
         etf()
     if "prives" in what:
         prives()
+    if "positions" in what:
+        positions()

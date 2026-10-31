@@ -18,6 +18,10 @@ jobs:
           python-version: "3.12"
       - name: Télécharger les postes Capareseau
         run: python3 scripts/update_capareseau.py
+      - name: Repositionner les postes aux coordonnées aberrantes
+        run: |
+          pip install -q beautifulsoup4==4.12.3
+          python3 scripts/collect_refs.py positions || echo "Repositionnement impossible, postes laissés tels quels"
       - name: Enregistrer si les données ont changé
         run: |
           if git diff --quiet -- data/postes.json; then

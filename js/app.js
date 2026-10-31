@@ -44,6 +44,8 @@
   function capClass(cap, P) { if (cap === null || cap <= 0) return "none"; return cap >= P ? "ok" : "part"; }
   const capColor = (cls) => css(cls === "ok" ? "--ok" : cls === "part" ? "--part" : "--none");
   const isGrd = (p) => !!(p.g1 || p.g2);
+  // position exploitable : en France métropolitaine (Capareseau publie quelques coordonnées nulles ou fausses)
+  const placed = (p) => p.moved || (p.pos !== "inconnue" && p.lat > 41.3 && p.lat < 51.2 && p.lon > -5.2 && p.lon < 9.7);
 
   /* ---------- positions corrigées des postes ----------
    * Ordre de priorité : data/postes-corrections.json (dépôt) < ce navigateur < lien (paramètre mv). */
@@ -253,6 +255,7 @@
     lyrAll.clearLayers();
     const P = params().p;
     for (const p of state.postes) {
+      if (!placed(p)) continue;
       const cls = capClass(capOf(p), P);
       L.circleMarker([p.lat, p.lon], { renderer: canvas, radius: 3.5, weight: 1, color: "#fff", fillColor: capColor(cls), fillOpacity: 0.85 })
         .bindTooltip(`${esc(p.n)} · ${fmt(capOf(p))} MW`, { direction: "top" })
@@ -404,7 +407,7 @@
   /* ---------- analyse ---------- */
   function nearest(site, P) {
     const pr = params();
-    const cands = state.postes.filter((p) => (pr.withRte || isGrd(p)));
+    const cands = state.postes.filter((p) => placed(p) && (pr.withRte || isGrd(p)));
     const withD = cands.map((p) => ({ p, d: haversine(site, p) })).sort((a, b) => a.d - b.d);
     const ok = withD.filter(({ p }) => { const c = capOf(p); if (pr.withCap && !(c > 0)) return false; return (c ?? 0) >= pr.minCap; });
     const firstFull = withD.find(({ p }) => (capOf(p) ?? 0) >= P);
@@ -514,6 +517,8 @@
       chips.push(`<span class="chip">${esc(p.g1 || "RTE")}${p.g2 ? " / " + esc(p.g2) : ""}</span>`);
       if (p.ht) chips.push(`<span class="chip">${esc(p.ht)}</span>`);
       if (p.moved) chips.push(`<span class="chip moved">position corrigée</span>`);
+      else if (p.pos === "commune") chips.push(`<span class="chip warn" title="Coordonnées Capareseau aberrantes : poste placé au centre de la commune du même nom. Déplacez-le sur la vue aérienne.">position approximative (commune)</span>`);
+      else if (p.pos === "osm" || p.pos === "inversion") chips.push(`<span class="chip" title="Coordonnées Capareseau aberrantes, position reprise ${p.pos === "osm" ? "d'OpenStreetMap" : "en inversant latitude et longitude"}">position ${p.pos === "osm" ? "OSM" : "rectifiée"}</span>`);
       if (p.pj === "1") chips.push(`<span class="chip warn">poste en projet S3REnR</span>`);
       if (cls === "part") chips.push(`<span class="chip warn">capacité &lt; ${fmt(pr.p)} MW</span>`);
       if (c.dep > 1) chips.push(`<span class="chip warn">câbles doublés (${c.dep} × ${fmt(c.cab.P, 1)} MW${c.cab.added ? ", chute de tension" : ""})</span>`);
