@@ -1,0 +1,42 @@
+Positions : 40 postes hors de France ou déjà repositionnés
+  24:B.VEV BOIS DE LA VEVE (-5.98452, -1.36872) -> lieudit (46.90349, 2.77629) Bois de la Vève, Charly – 2 lieux-dits homonymes dans la région, à vérifier
+  24:936AA INDRE SUD (-5.98866, -1.36302) -> inconnue (-5.98866, -1.36302) 
+  24:THEUV THEUVILLE (-5.98008, -1.36107) -> commune (48.3282, 1.5925) Theuville
+  27:LARRE LARREY (-5.9823, -1.36699) -> commune (47.8986, 4.4273) Larrey
+  27:SALI5 SALINS (-5.98127, -1.35747) -> commune (46.9503, 5.9054) Salins-les-Bains
+  27:DEFOI DEFOIS (-5.98115, -1.36741) -> lieudit (47.58723, 4.05008) Defois, Blacy
+  27:DOUEE DOUEE (-5.98419, -1.36683) -> inconnue (-5.98419, -1.36683) 
+  27:GUEU8 GUEUGNON8 (-5.98639, -1.36171) -> osm (46.60815, 4.07432) 
+  32:CONCO CONCOURS (LE) (-5.99038, -1.36846) -> lieudit (49.80953, 3.67035) le Concours, Le Hérie-la-Viéville – 2 lieux-dits homonymes dans la région, à vérifier
+  32:F.UTE FONTAINE-UTERTE (-5.9787, -1.36226) -> commune (49.9266, 3.3689) Fontaine-Uterte
+  32:G.POR GRAND-PORT (-5.98298, -1.3606) -> osm (50.96146, 2.19777) 
+  32:962AB FRUGES 3 (-5.98423, -1.36775) -> commune (50.5143, 2.1184) Fruges
+  32:C.NEU COUPELLE NEUVE (-5.98689, -1.36092) -> osm (50.49962, 2.09695) 
+  32:F.GOS FOND GOSSON (-5.98264, -1.36196) -> osm (50.5004, 2.09651) 
+  32:MARGO MARGOT (-5.98327, -1.36576) -> inconnue (-5.98327, -1.36576) 
+  32:BERSA BERSAUCOURT (-5.98671, -1.35942) -> osm (49.79555, 2.85548) 
+  32:BRESL BRESL (-5.98682, -1.35813) -> inconnue (-5.98682, -1.35813) 
+  32:GAUVI GAUVILLE (-5.98673, -1.36096) -> osm (49.77138, 1.78328) 
+  32:COQU7 COQUEREL (-5.98894, -1.36697) -> lieudit (49.55777, 2.99915) Coquerel, Sempigny
+  44:B.RUM BOSSUS-LES-RUMIGNY (-5.98761, -1.3655) -> commune (49.841, 4.2556) Bossus-lès-Rumigny
+  44:ECLYY ECLY (-5.98666, -1.35705) -> commune (49.5529, 4.2841) Écly
+  44:PARFO PARFONDVAL (-5.98648, -1.36079) -> lieudit (49.43398, 4.50998) Parfondval, Saulces-Champenoises
+  44:EDROL EDROLLES (LES) (-5.97984, -1.35938) -> lieudit (48.63697, 3.97421) les Edrolles, Faux-Fresnay
+  44:SOMME SOMMES-VESLES (-5.97894, -1.3669) -> commune (48.9937, 4.6225) Somme-Vesle
+  75:FOUG7 LE FOUGEROUX (-5.98291, -1.35803) -> lieudit (45.79405, -0.43667) le Fougeroux, Villars-les-Bois – 7 lieux-dits homonymes dans la région, à vérifier
+  75:RAMPE RAMPEAU (-5.98196, -1.36785) -> inconnue (-5.98196, -1.36785) 
+  75:NIVEL NIVELLE (LA) (-5.98898, -1.36657) -> osm (43.38365, -1.54237) 
+  75:SSTRE SAINT HILAIRE LA TREILLE (-5.98181, -1.36852) -> commune (46.25, 1.3077) Saint-Hilaire-la-Treille
+  76:A.DOU ARNAC-SUR-DOURDOU (43.41248, -5.63483) -> osm (43.72436, 2.97337) 
+  76:JOURR JOURRE (LA) (2.78439, 43.2076) -> inversion (43.2076, 2.78439) 
+  76:LIROU LIROU (-5.98061, -1.36002) -> lieudit (42.88914, 1.78251) Lirou, Montferrier – 4 lieux-dits homonymes dans la région, à vérifier
+  76:COUME COUMETTE (2.64611, 43.08149) -> inversion (43.08149, 2.64611) 
+  76:NESTE NESTE (-5.98177, -1.36011) -> inconnue (-5.98177, -1.36011) 
+  76:BDROU BORDEROUGE (-5.98299, -1.36045) -> lieudit (43.33598, 2.21484) Borderouge, Montolieu – 2 lieux-dits homonymes dans la région, à vérifier
+  76:CEPET CEPET (-5.98588, -1.36834) -> commune (43.7487, 1.4368) Cépet
+  84:AUZER AUZERETTE (-5.98951, -1.36847) -> osm (45.3647, 2.64628) 
+  84:TREI7 TREIGNAT (-5.98615, -1.36283) -> commune (46.3469, 2.3458) Treignat
+  84:TARGE TARGET (-5.98289, -1.36741) -> commune (46.282, 3.0503) Target
+  84:H.DEV HENRI-DEVILLE (-5.98777, -1.35751) -> osm (45.27654, 6.36059) 
+  84:MYANS MYANS (-5.98321, -1.36599) -> commune (45.5196, 5.9812) Myans
+Positions corrigées : {'inversion': 2, 'osm': 10, 'commune': 13, 'lieudit': 9, 'inconnue': 6}
