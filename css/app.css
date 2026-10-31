@@ -287,3 +287,10 @@ a { color: var(--accent); }
 .pin-gps { width: 18px; height: 18px; border-radius: 50%; background: #1c7ed6; border: 3px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .3), 0 0 0 6px rgb(28 126 214 / .25); }
 .toast { position: absolute; z-index: 900; left: 50%; top: 12px; transform: translateX(-50%); max-width: min(92%, 420px); background: var(--ink); color: var(--panel); padding: 8px 12px; border-radius: 6px; font-size: 13px; box-shadow: 0 4px 16px rgb(0 0 0 / .25); }
 @media (max-width: 760px) { .geo-btn { width: 44px; height: 44px; } .geo-btn svg { width: 24px; height: 24px; } .toast { top: 56px; } }
+
+/* postes en projet au S3REnR : contours en pointillés */
+.pin-poste.pj .pt { background: color-mix(in srgb, var(--c) 25%, #fff); border: 2px dashed var(--c); box-shadow: none; }
+.pin-poste.pj .lab { background: #fff; color: var(--ink); border: 1.5px dashed var(--c); }
+.poste.pj { border-style: dashed; border-color: var(--c, var(--line)); }
+.poste.pj.sel { border-style: dashed; border-color: var(--accent); }
+.lg-pj { width: 10px; height: 10px; border-radius: 50%; border: 1.6px dashed var(--muted); display: inline-block; }

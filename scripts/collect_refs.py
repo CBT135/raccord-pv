@@ -235,22 +235,101 @@ def osm_name(n):
     return n.strip()
 
 
-def commune_geo(name, region):
-    """Centre de la commune portant exactement le nom du poste, dans la région du poste."""
-    base = re.sub(r"\(.*?\)|\d+$", " ", name).strip()
-    m = re.match(r"^\s*(.*?)\s*\((LES|LA|LE|L)\)\s*$", name.strip(), re.I)
-    cands = [base] + ([f"{m.group(2)} {m.group(1)}"] if m else [])
-    for c in cands:
+_geo_cache = {}
+
+
+def _communes(q, region):
+    k = (q, region)
+    if k not in _geo_cache:
         try:
-            js = json.loads(cp.http("https://geo.api.gouv.fr/communes?" + urllib.parse.urlencode(
-                {"nom": c, "codeRegion": region, "fields": "nom,centre,codeDepartement", "boost": "population", "limit": 5}), timeout=30))
+            _geo_cache[k] = json.loads(cp.http("https://geo.api.gouv.fr/communes?" + urllib.parse.urlencode(
+                {"nom": q, "codeRegion": region, "fields": "nom,centre,codeDepartement,population", "boost": "population", "limit": 20}), timeout=30))
         except Exception as e:
-            log(f"  geo.api : {e}")
+            log(f"  geo.api {q} : {e}")
+            _geo_cache[k] = []
+    return _geo_cache[k]
+
+
+def commune_exact(name, region, prefix=False):
+    n = cp.norm(name)
+    if len(n) < 3:
+        return None
+    hits = [x for x in _communes(name, region) if x.get("centre") and (cp.norm(x["nom"]) == n or (prefix and cp.norm(x["nom"]).startswith(n + " ")))]
+    if not hits:
+        return None
+    x = max(hits, key=lambda x: (cp.norm(x["nom"]) == n, x.get("population") or 0))
+    lon, lat = x["centre"]["coordinates"]
+    return lat, lon, x["nom"]
+
+
+def name_cands(name):
+    base = re.sub(r"\(.*?\)|\s*\d+$", " ", name).strip()
+    m = re.match(r"^\s*(.*?)\s*\((LES|LA|LE|L)\)\s*$", name.strip(), re.I)
+    return [base] + ([f"{m.group(2)} {m.group(1)}"] if m else [])
+
+
+def commune_geo(name, region):
+    """Centre de la commune portant le nom du poste (exact, puis « Salins » -> « Salins-les-Bains »), dans la région du poste."""
+    for prefix in (False, True):
+        for c in name_cands(name):
+            r = commune_exact(c, region, prefix)
+            if r:
+                return r
+    return None
+
+
+_etf_pages = {}
+COMMUNE_CTX = re.compile(r"\bCOMMUNES? (?:DE LA |DE L |DES |DU |DE |D )?((?:[A-Z]+ ){0,5}[A-Z]+)")
+
+
+def etf_commune(p, etf_docs):
+    """Commune citée à côté du nom du poste dans l'ETF S3REnR de la région (« création du poste X sur la commune de Y »)."""
+    keys = [k for k in cp.Postes.keys(p["n"]) if len(k) >= 4]
+    for d in sorted([d for d in etf_docs if d["r"] == p["r"]], key=lambda d: -d["y"]):
+        if d["u"] not in _etf_pages:
+            try:
+                _etf_pages[d["u"]] = pdf_pages(d["u"])[0]
+            except Exception as e:
+                log(f"  ETF {d['u']} : {e}")
+                _etf_pages[d["u"]] = []
+        for t in _etf_pages[d["u"]]:
+            for k in keys:
+                for m in name_rx(k).finditer(t):
+                    win = t[max(0, m.start() - 250): m.end() + 400]
+                    for cm in COMMUNE_CTX.finditer(win):
+                        words = cm.group(1).split()
+                        for n in range(len(words), 0, -1):
+                            r = commune_exact(" ".join(words[:n]), p["r"])
+                            if r:
+                                return r
+    return None
+
+
+_reg_deps = {}
+
+
+def lieudit_geo(name, region):
+    """Lieu-dit ou toponyme du nom du poste (géocodeur IGN, index des points d'intérêt), dans la région du poste."""
+    if region not in _reg_deps:
+        try:
+            _reg_deps[region] = {d["code"] for d in json.loads(cp.http(f"https://geo.api.gouv.fr/regions/{region}/departements", timeout=30))}
+        except Exception:
+            _reg_deps[region] = set()
+    for c in name_cands(name):
+        try:
+            js = json.loads(cp.http("https://data.geopf.fr/geocodage/search?" + urllib.parse.urlencode({"q": c, "index": "poi", "limit": 20}), timeout=30))
+        except Exception as e:
+            log(f"  géocodeur IGN {c} : {e}")
             continue
-        for x in js:
-            if cp.norm(x["nom"]) == cp.norm(c) and x.get("centre"):
-                lon, lat = x["centre"]["coordinates"]
-                return lat, lon, x["nom"]
+        for f in js.get("features", []):
+            pr = f.get("properties", {})
+            names = pr.get("name") if isinstance(pr.get("name"), list) else [pr.get("name") or pr.get("toponym") or ""]
+            city = pr.get("citycode")
+            city = city[0] if isinstance(city, list) and city else city
+            dep = (city or "")[:3] if str(city or "").startswith("97") else (city or "")[:2]
+            if any(cp.norm(n) == cp.norm(c) for n in names) and (not _reg_deps[region] or dep in _reg_deps[region]):
+                lon, lat = f["geometry"]["coordinates"][:2]
+                return lat, lon, ", ".join(x for x in [names[0], (pr.get("city") or [""])[0] if isinstance(pr.get("city"), list) else pr.get("city")] if x)
     return None
 
 
@@ -277,7 +356,11 @@ def positions():
             by_ref.setdefault(t["ref:FR:RTE"].strip().upper(), []).append((lat, lon))
         if t.get("name"):
             by_name.setdefault(osm_name(t["name"]), []).append((lat, lon))
-    n = {"inversion": 0, "osm": 0, "commune": 0, "inconnue": 0}
+    n = {"inversion": 0, "osm": 0, "commune": 0, "lieudit": 0, "inconnue": 0}
+    try:
+        etf_docs = json.load(open(os.path.join(DATA, "etf.json"), encoding="utf-8")).get("docs", [])
+    except Exception:
+        etf_docs = []
     for p in bad:
         lat0, lon0 = p.get("olat", p["lat"]), p.get("olon", p["lon"])
         p["olat"], p["olon"] = lat0, lon0  # coordonnées publiées par Capareseau, gardées pour mémoire
@@ -295,13 +378,23 @@ def positions():
         if not res:
             c = commune_geo(p["n"], p["r"])
             if c:
-                res = (c[0], c[1], "commune")
+                res = (c[0], c[1], "commune", c[2])
+        if not res:
+            c = etf_commune(p, etf_docs)
+            if c:
+                res = (c[0], c[1], "commune", c[2] + " (citée dans l'ETF)")
+        if not res:
+            c = lieudit_geo(p["n"], p["r"])
+            if c:
+                res = (c[0], c[1], "lieudit", c[2])
         if res and in_fr(res[0], res[1]):
             p["lat"], p["lon"], p["pos"] = round(res[0], 5), round(res[1], 5), res[2]
+            if len(res) > 3:
+                p["posn"] = res[3]  # commune ou lieu-dit retenu
         else:
             p["pos"] = "inconnue"
         n[p["pos"]] += 1
-        log(f"  {p['r']}:{p['c']} {p['n']} ({lat0}, {lon0}) -> {p['pos']} ({p['lat']}, {p['lon']})")
+        log(f"  {p['r']}:{p['c']} {p['n']} ({lat0}, {lon0}) -> {p['pos']} ({p['lat']}, {p['lon']}) {p.get('posn') or ''}")
     log(f"Positions corrigées : {n}")
     json.dump(postes, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
 

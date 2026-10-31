@@ -257,8 +257,11 @@
     for (const p of state.postes) {
       if (!placed(p)) continue;
       const cls = capClass(capOf(p), P);
-      L.circleMarker([p.lat, p.lon], { renderer: canvas, radius: 3.5, weight: 1, color: "#fff", fillColor: capColor(cls), fillOpacity: 0.85 })
-        .bindTooltip(`${esc(p.n)} · ${fmt(capOf(p))} MW`, { direction: "top" })
+      const pj = p.pj === "1";
+      L.circleMarker([p.lat, p.lon], pj
+        ? { renderer: canvas, radius: 4.5, weight: 1.6, color: capColor(cls), dashArray: "2 2", fillColor: capColor(cls), fillOpacity: 0.18 }
+        : { renderer: canvas, radius: 3.5, weight: 1, color: "#fff", fillColor: capColor(cls), fillOpacity: 0.85 })
+        .bindTooltip(`${esc(p.n)} · ${fmt(capOf(p))} MW${pj ? " · poste en projet S3REnR" : ""}${p.pos === "commune" || p.pos === "lieudit" ? ` · position approximative${p.posn ? " (" + esc(p.posn) + ")" : ""}` : ""}`, { direction: "top" })
         .on("click", (e) => { L.DomEvent.stopPropagation(e); showPostePopup(p, e.latlng); })
         .addTo(lyrAll);
     }
@@ -510,14 +513,14 @@
     state.results.forEach((r, idx) => {
       const p = r.p, v = p.v, cap = capOf(p), cls = capClass(cap, pr.p), c = costFor(r, pr);
       const li = document.createElement("li");
-      li.className = "poste" + (idx === state.sel ? " sel" : "");
+      li.className = "poste" + (idx === state.sel ? " sel" : "") + (p.pj === "1" ? " pj" : "");
       li.style.setProperty("--c", capColor(cls));
       li.tabIndex = 0;
       const chips = [];
       chips.push(`<span class="chip">${esc(p.g1 || "RTE")}${p.g2 ? " / " + esc(p.g2) : ""}</span>`);
       if (p.ht) chips.push(`<span class="chip">${esc(p.ht)}</span>`);
       if (p.moved) chips.push(`<span class="chip moved">position corrigée</span>`);
-      else if (p.pos === "commune") chips.push(`<span class="chip warn" title="Coordonnées Capareseau aberrantes : poste placé au centre de la commune du même nom. Déplacez-le sur la vue aérienne.">position approximative (commune)</span>`);
+      else if (p.pos === "commune" || p.pos === "lieudit") chips.push(`<span class="chip warn" title="Position inconnue dans Capareseau : poste placé ${p.pos === "commune" ? "au centre de la commune" : "sur le lieu-dit"} ${esc(p.posn || "du même nom")}. Déplacez-le sur la vue aérienne.">position approximative (${p.pos === "commune" ? "commune" : "lieu-dit"})</span>`);
       else if (p.pos === "osm" || p.pos === "inversion") chips.push(`<span class="chip" title="Coordonnées Capareseau aberrantes, position reprise ${p.pos === "osm" ? "d'OpenStreetMap" : "en inversant latitude et longitude"}">position ${p.pos === "osm" ? "OSM" : "rectifiée"}</span>`);
       if (p.pj === "1") chips.push(`<span class="chip warn">poste en projet S3REnR</span>`);
       if (cls === "part") chips.push(`<span class="chip warn">capacité &lt; ${fmt(pr.p)} MW</span>`);
@@ -610,7 +613,7 @@
     state.results.forEach((r, idx) => {
       const cls = capClass(capOf(r.p), pr.p), col = capColor(cls);
       const line = L.polyline([[state.site.lat, state.site.lon], [r.p.lat, r.p.lon]], { color: col, weight: idx === state.sel ? 2.5 : 1.5, dashArray: "6 6", opacity: 0.9, interactive: false }).addTo(lyrLinks);
-      const html = `<div class="pin-poste${r.p.moved ? " moved" : ""}" style="--c:${col}"><div class="pt"></div><div class="lab">${idx + 1} · ${fmt(capOf(r.p))} MW</div></div>`;
+      const html = `<div class="pin-poste${r.p.moved ? " moved" : ""}${r.p.pj === "1" ? " pj" : ""}" style="--c:${col}"><div class="pt"></div><div class="lab">${idx + 1} · ${fmt(capOf(r.p))} MW</div></div>`;
       L.marker([r.p.lat, r.p.lon], { icon: L.divIcon({ className: "", html, iconSize: [0, 0] }), zIndexOffset: 500 - idx, draggable: true, autoPan: true })
         .bindTooltip(r.p.moved ? "Position corrigée — glisser pour ajuster" : "Glisser pour corriger la position", { direction: "bottom", offset: [0, 12] })
         .on("dragstart", () => map.closePopup())
