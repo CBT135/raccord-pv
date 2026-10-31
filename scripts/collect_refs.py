@@ -243,18 +243,21 @@ def _communes(q, region):
     if k not in _geo_cache:
         try:
             _geo_cache[k] = json.loads(cp.http("https://geo.api.gouv.fr/communes?" + urllib.parse.urlencode(
-                {"nom": q, "codeRegion": region, "fields": "nom,centre,codeDepartement,population", "boost": "population", "limit": 20}), timeout=30))
+                {"nom": q, "codeRegion": region, "fields": "nom,centre,codeDepartement,population", "boost": "population", "limit": 50}), timeout=30))
         except Exception as e:
             log(f"  geo.api {q} : {e}")
             _geo_cache[k] = []
     return _geo_cache[k]
 
 
-def commune_exact(name, region, prefix=False):
+def commune_exact(name, region, prefix=False, fuzzy=False):
     n = cp.norm(name)
     if len(n) < 3:
         return None
-    hits = [x for x in _communes(name, region) if x.get("centre") and (cp.norm(x["nom"]) == n or (prefix and cp.norm(x["nom"]).startswith(n + " ")))]
+    import difflib
+    ok = lambda c: c == n or (prefix and c.startswith(n + " ")) or (fuzzy and len(n) >= 6 and difflib.SequenceMatcher(None, c, n).ratio() >= 0.9)
+    pool = _communes(name, region) + _communes(re.sub(r"\s+", "-", name.strip()), region)
+    hits = [x for x in pool if x.get("centre") and ok(cp.norm(x["nom"]))]
     if not hits:
         return None
     x = max(hits, key=lambda x: (cp.norm(x["nom"]) == n, x.get("population") or 0))
@@ -270,9 +273,9 @@ def name_cands(name):
 
 def commune_geo(name, region):
     """Centre de la commune portant le nom du poste (exact, puis « Salins » -> « Salins-les-Bains »), dans la région du poste."""
-    for prefix in (False, True):
+    for prefix, fuzzy in ((False, False), (True, False), (False, True)):
         for c in name_cands(name):
-            r = commune_exact(c, region, prefix)
+            r = commune_exact(c, region, prefix, fuzzy)
             if r:
                 return r
     return None
