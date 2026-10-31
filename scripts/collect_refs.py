@@ -271,6 +271,9 @@ def name_cands(name):
     return [base] + ([f"{m.group(2)} {m.group(1)}"] if m else [])
 
 
+MANUAL_COMMUNE = {"44:SOMME": "Somme-Vesle"}  # graphie Capareseau éloignée du nom de la commune
+
+
 def commune_geo(name, region):
     """Centre de la commune portant le nom du poste (exact, puis « Salins » -> « Salins-les-Bains »), dans la région du poste."""
     for prefix, fuzzy in ((False, False), (True, False), (False, True)):
@@ -324,6 +327,7 @@ def lieudit_geo(name, region):
         except Exception as e:
             log(f"  géocodeur IGN {c} : {e}")
             continue
+        hits = []
         for f in js.get("features", []):
             pr = f.get("properties", {})
             names = pr.get("name") if isinstance(pr.get("name"), list) else [pr.get("name") or pr.get("toponym") or ""]
@@ -332,7 +336,16 @@ def lieudit_geo(name, region):
             dep = (city or "")[:3] if str(city or "").startswith("97") else (city or "")[:2]
             if any(cp.norm(n) == cp.norm(c) for n in names) and (not _reg_deps[region] or dep in _reg_deps[region]):
                 lon, lat = f["geometry"]["coordinates"][:2]
-                return lat, lon, ", ".join(x for x in [names[0], (pr.get("city") or [""])[0] if isinstance(pr.get("city"), list) else pr.get("city")] if x)
+                cname = (pr.get("city") or [""])[0] if isinstance(pr.get("city"), list) else pr.get("city")
+                hits.append((round(lat, 5), round(lon, 5), ", ".join(x for x in [names[0], cname] if x)))
+        if hits:
+            # homonymes : choix stable (le premier par latitude), signalé pour vérification
+            groups = []
+            for h in sorted(hits):
+                if not any(cp.hav(h[:2], g[:2]) < 5 for g in groups):
+                    groups.append(h)
+            h = groups[0]
+            return h[0], h[1], h[2] + (f" – {len(groups)} lieux-dits homonymes dans la région, à vérifier" if len(groups) > 1 else "")
     return None
 
 
@@ -379,7 +392,7 @@ def positions():
             if len({(round(a, 2), round(b, 2)) for a, b in hits}) == 1:
                 res = (hits[0][0], hits[0][1], "osm")
         if not res:
-            c = commune_geo(p["n"], p["r"])
+            c = commune_geo(MANUAL_COMMUNE.get(f"{p['r']}:{p['c']}", p["n"]), p["r"])
             if c:
                 res = (c[0], c[1], "commune", c[2])
         if not res:
