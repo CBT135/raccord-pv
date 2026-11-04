@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Raccord PV</title>
+  <rect width="512" height="512" fill="#0E1418"/>
+  <!-- soleil (le site) -->
+  <g fill="#F5B23D">
+    <circle cx="166" cy="168" r="62"/>
+    <g transform="translate(166 168)">
+      <rect x="-8" y="-118" width="16" height="36" rx="2"/>
+      <rect x="-8" y="-118" width="16" height="36" rx="2" transform="rotate(45)"/>
+      <rect x="-8" y="-118" width="16" height="36" rx="2" transform="rotate(90)"/>
+      <rect x="-8" y="-118" width="16" height="36" rx="2" transform="rotate(135)"/>
+      <rect x="-8" y="-118" width="16" height="36" rx="2" transform="rotate(225)"/>
+      <rect x="-8" y="-118" width="16" height="36" rx="2" transform="rotate(270)"/>
+      <rect x="-8" y="-118" width="16" height="36" rx="2" transform="rotate(315)"/>
+    </g>
+  </g>
+  <!-- poste source (pylône) -->
+  <g fill="none" stroke="#6E7A80" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M330 404 L382 196 L434 404"/>
+    <path d="M306 250 H458"/>
+    <path d="M326 306 H438"/>
+    <path d="M356 306 L408 250 M356 250 L408 306"/>
+  </g>
+  <g fill="#2B383F">
+    <rect x="296" y="404" width="172" height="24" rx="6"/>
+  </g>
+  <!-- liaison de raccordement -->
+  <path d="M166 268 V372 Q166 404 198 404 H300" fill="none" stroke="#4FC3F7" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="166" cy="268" r="22" fill="#4FC3F7"/>
+</svg>

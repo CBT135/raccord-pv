@@ -229,7 +229,8 @@
     await loadLibs();
     const { jsPDF } = window.jspdf;
     const MW = 1000, MH = 560;
-    const [map, ville] = await Promise.all([renderMap(d, MW, MH, 2).catch(() => null), commune(d.site)]);
+    const logo = fetch("img/logo-96.png").then((r) => (r.ok ? r.blob() : null)).then((b) => b && new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(b); })).catch(() => null);
+    const [map, ville, logoUrl] = await Promise.all([renderMap(d, MW, MH, 2).catch(() => null), commune(d.site), logo]);
 
     const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const M = 15, W = 180, pageH = 297, bottom = 20;
@@ -240,9 +241,11 @@
     let y = 12;
 
     // en-tête
-    set(8, "bold", C.accent); doc.text("RACCORD PV", M, y);
+    const xL = logoUrl ? M + 6.5 : M;
+    if (logoUrl) try { doc.addImage(logoUrl, "PNG", M, y - 4.2, 5, 5); } catch (_) {}
+    set(8, "bold", C.accent); doc.text("RACCORD PV", xL, y);
     const wR = doc.getTextWidth("RACCORD PV ");
-    set(8, "normal", C.muted); doc.text(T("· Pré-étude de raccordement en injection"), M + wR, y);
+    set(8, "normal", C.muted); doc.text(T("· Pré-étude de raccordement en injection"), xL + wR, y);
     doc.text(T(`Édité le ${today}`), M + W, y, { align: "right" });
     doc.setDrawColor(...C.line); doc.setLineWidth(0.3); doc.line(M, y + 2.5, M + W, y + 2.5);
     y += 11;

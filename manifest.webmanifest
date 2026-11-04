@@ -1,0 +1,16 @@
+{
+  "name": "Raccord PV",
+  "short_name": "Raccord PV",
+  "description": "Pré-étude de raccordement PV en injection : postes sources, capacités S3REnR, coût, projets voisins.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0E1418",
+  "theme_color": "#0E1418",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/logo.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
