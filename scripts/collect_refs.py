@@ -151,7 +151,10 @@ PROD = re.compile(r"[ée]olien|solaire|photovolta|parc |centrale|wind|solar|neoe
 def overpass(query=None):
     query = query or QUERY
     last = None
-    for ep in OVERPASS:
+    import time
+    for attempt, ep in enumerate(OVERPASS * 3):  # 3 tours des serveurs, attente croissante
+        if attempt and attempt % len(OVERPASS) == 0:
+            time.sleep(120 * (attempt // len(OVERPASS)))
         try:
             req = urllib.request.Request(ep, data=urllib.parse.urlencode({"data": query}).encode(),
                                          headers={"User-Agent": "raccord-pv/1.0 (github.com/cbt135/raccord-pv)"})
@@ -417,9 +420,15 @@ def positions():
 
 if __name__ == "__main__":
     what = sys.argv[1:] or ["etf", "prives"]
-    if "etf" in what:
-        etf()
-    if "prives" in what:
-        prives()
-    if "positions" in what:
-        positions()
+    ok, ko = [], []
+    for name, fn in (("etf", etf), ("prives", prives), ("positions", positions)):
+        if name not in what:
+            continue
+        try:
+            fn()
+            ok.append(name)
+        except Exception as e:  # une source indisponible (Overpass…) ne doit pas faire perdre les autres
+            log(f"ÉCHEC {name} : {e} ; données précédentes conservées")
+            ko.append(name)
+    log(f"Terminé : réussi {ok or '-'} ; échoué {ko or '-'}")
+    sys.exit(1 if ko and not ok else 0)
