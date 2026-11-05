@@ -1,17 +1,17 @@
 {
- "collecte": "2026-11-04",
- "depuis": "2020-11-04",
+ "collecte": "2026-11-05",
+ "depuis": "2020-11-05",
  "sources": {
   "pe": 2643,
   "novae": 1048,
   "mrae": 1653,
-  "pref": 351
+  "pref": 400
  },
  "sources_date": {
   "pe": "2026-11-02",
   "novae": "2026-11-02",
   "mrae": "2026-11-02",
-  "pref": "2026-11-04"
+  "pref": "2026-11-05"
  },
  "prefectures": {
   "01": {
@@ -70,10 +70,9 @@
    "le": "2026-10-29"
   },
   "12": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "resultats": 60,
+   "projets": 8,
+   "le": "2026-11-05"
   },
   "13": {
    "resultats": 81,
@@ -86,10 +85,9 @@
    "le": "2026-11-03"
   },
   "15": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "resultats": 47,
+   "projets": 7,
+   "le": "2026-11-05"
   },
   "16": {
    "resultats": 10,
@@ -160,7 +158,7 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-04"
+   "le": "2026-11-05"
   },
   "31": {
    "resultats": 153,
@@ -328,28 +326,25 @@
    "le": "2026-11-03"
   },
   "64": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "resultats": 20,
+   "projets": 7,
+   "le": "2026-11-05"
   },
   "65": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "resultats": 23,
+   "projets": 9,
+   "le": "2026-11-05"
   },
   "66": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "resultats": 37,
+   "projets": 3,
+   "le": "2026-11-05"
   },
   "67": {
    "resultats": 0,
    "projets": 0,
    "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "le": "2026-11-05"
   },
   "68": {
    "resultats": 1,
@@ -365,13 +360,12 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "le": "2026-11-05"
   },
   "71": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-04"
+   "resultats": 10,
+   "projets": 1,
+   "le": "2026-11-05"
   },
   "72": {
    "resultats": 10,
@@ -398,13 +392,42 @@
    "projets": 1,
    "le": "2026-11-04"
   },
-  "78": null,
-  "79": null,
-  "80": null,
-  "81": null,
-  "82": null,
-  "83": null,
-  "84": null,
+  "78": {
+   "resultats": 1,
+   "projets": 0,
+   "le": "2026-11-05"
+  },
+  "79": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-05"
+  },
+  "80": {
+   "resultats": 22,
+   "projets": 4,
+   "le": "2026-11-05"
+  },
+  "81": {
+   "resultats": 48,
+   "projets": 7,
+   "le": "2026-11-05"
+  },
+  "82": {
+   "resultats": 30,
+   "projets": 1,
+   "le": "2026-11-05"
+  },
+  "83": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-05"
+  },
+  "84": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-05"
+  },
   "85": null,
   "86": null,
   "87": null,
@@ -417,15 +440,15 @@
   "94": null,
   "95": null
  },
- "documents_lus": 2,
+ "documents_lus": 30,
  "documents_en_attente": 0,
  "projets": {
-  "total": 3904,
+  "total": 3936,
   "avec_poste": 1994,
-  "puissance_inconnue": 1187,
-  "eol": 1500,
-  "pv": 2380,
-  "bess": 87
+  "puissance_inconnue": 1220,
+  "eol": 1515,
+  "pv": 2397,
+  "bess": 91
  },
- "duree_s": 1477
+ "duree_s": 3977
 }
