@@ -1,4 +1,16 @@
 {
+ "75:AURIO": {
+  "lat": 44.745237,
+  "lon": 0.035319,
+  "n": "AURIOLLES",
+  "date": "2026-11-05"
+ },
+ "75:BESSA": {
+  "lat": 45.084736,
+  "lon": -0.057592,
+  "n": "BESSANGES",
+  "date": "2026-11-05"
+ },
  "75:ETAUL": {
   "lat": 45.219257,
   "lon": -0.566826,
@@ -14,20 +26,56 @@
   "lon": -0.945876,
   "n": "LESPARRE MEDOC"
  },
+ "75:MENES": {
+  "lat": 45.00917,
+  "lon": 0.128489,
+  "n": "MENESPLET",
+  "date": "2026-11-05"
+ },
  "75:MTEND": {
   "lat": 45.294813,
   "lon": -0.394478,
   "n": "MONTENDRE"
+ },
+ "75:MTGUY": {
+  "lat": 45.203476,
+  "lon": -0.218267,
+  "n": "MONTGUYON",
+  "date": "2026-11-05"
  },
  "75:PAUIL": {
   "lat": 45.20581,
   "lon": -0.755782,
   "n": "PAUILLAC (REGIE DU MEDOC)"
  },
+ "75:POMER": {
+  "lat": 44.938325,
+  "lon": -0.231078,
+  "n": "POMEROL",
+  "date": "2026-11-05"
+ },
  "75:PONS": {
   "lat": 45.572989,
   "lon": -0.56276,
   "n": "PONS"
+ },
+ "75:SSCUB": {
+  "lat": 45.000733,
+  "lon": -0.461726,
+  "n": "ST-ANDRE-DE-CUBZAC",
+  "date": "2026-11-05"
+ },
+ "75:SSGCO": {
+  "lat": 44.939351,
+  "lon": 0.236807,
+  "n": "ST GERAUD DE CORPS",
+  "date": "2026-11-05"
+ },
+ "75:SSPEY": {
+  "lat": 44.857072,
+  "lon": -0.123188,
+  "n": "ST-PEY",
+  "date": "2026-11-05"
  },
  "75:THAIM": {
   "lat": 45.602791,
