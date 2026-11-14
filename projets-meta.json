@@ -1,0 +1,502 @@
+{
+ "collecte": "2026-11-14",
+ "depuis": "2020-11-14",
+ "sources": {
+  "pe": 2653,
+  "novae": 1062,
+  "mrae": 1653,
+  "pref": 316
+ },
+ "sources_date": {
+  "pe": "2026-11-09",
+  "novae": "2026-11-09",
+  "mrae": "2026-11-09",
+  "pref": "2026-11-14"
+ },
+ "prefectures": {
+  "01": {
+   "resultats": 23,
+   "projets": 5,
+   "le": "2026-11-09"
+  },
+  "02": {
+   "resultats": 35,
+   "projets": 10,
+   "le": "2026-11-08"
+  },
+  "03": {
+   "resultats": 20,
+   "projets": 3,
+   "le": "2026-11-09"
+  },
+  "04": {
+   "resultats": 10,
+   "projets": 1,
+   "le": "2026-11-09"
+  },
+  "05": {
+   "resultats": 3,
+   "projets": 0,
+   "le": "2026-11-10"
+  },
+  "06": {
+   "resultats": 18,
+   "projets": 0,
+   "le": "2026-11-09"
+  },
+  "07": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-09"
+  },
+  "08": {
+   "resultats": 33,
+   "projets": 16,
+   "le": "2026-11-11"
+  },
+  "09": {
+   "resultats": 22,
+   "projets": 4,
+   "le": "2026-11-10"
+  },
+  "10": {
+   "resultats": 10,
+   "projets": 5,
+   "le": "2026-11-10"
+  },
+  "11": {
+   "resultats": 166,
+   "projets": 4,
+   "le": "2026-11-11"
+  },
+  "12": {
+   "resultats": 60,
+   "projets": 8,
+   "le": "2026-11-05"
+  },
+  "13": {
+   "resultats": 3,
+   "projets": 1,
+   "le": "2026-11-12"
+  },
+  "14": {
+   "resultats": 14,
+   "projets": 6,
+   "le": "2026-11-03"
+  },
+  "15": {
+   "resultats": 47,
+   "projets": 7,
+   "le": "2026-11-05"
+  },
+  "16": {
+   "resultats": 15,
+   "projets": 4,
+   "le": "2026-11-12"
+  },
+  "17": {
+   "resultats": 5,
+   "projets": 2,
+   "le": "2026-11-10"
+  },
+  "18": {
+   "resultats": 10,
+   "projets": 5,
+   "le": "2026-11-12"
+  },
+  "19": {
+   "resultats": 17,
+   "projets": 1,
+   "le": "2026-11-12"
+  },
+  "21": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-12"
+  },
+  "22": {
+   "resultats": 4,
+   "projets": 1,
+   "le": "2026-11-14"
+  },
+  "23": {
+   "resultats": 20,
+   "projets": 4,
+   "le": "2026-11-10"
+  },
+  "24": {
+   "resultats": 4,
+   "projets": 2,
+   "le": "2026-11-14"
+  },
+  "25": {
+   "resultats": 15,
+   "projets": 4,
+   "le": "2026-11-14"
+  },
+  "26": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-03"
+  },
+  "27": {
+   "resultats": 16,
+   "projets": 2,
+   "le": "2026-11-14"
+  },
+  "28": {
+   "resultats": 13,
+   "projets": 2,
+   "le": "2026-11-12"
+  },
+  "29": {
+   "resultats": 36,
+   "projets": 2,
+   "le": "2026-11-12"
+  },
+  "30": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "HTTP Error 404: Not Found",
+   "le": "2026-11-14"
+  },
+  "31": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "HTTP Error 404: Not Found",
+   "le": "2026-11-14"
+  },
+  "32": {
+   "resultats": 17,
+   "projets": 2,
+   "le": "2026-11-12"
+  },
+  "33": {
+   "resultats": 19,
+   "projets": 0,
+   "le": "2026-11-12"
+  },
+  "34": {
+   "resultats": 7,
+   "projets": 0,
+   "le": "2026-11-12"
+  },
+  "35": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-13"
+  },
+  "36": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-13"
+  },
+  "37": {
+   "resultats": 10,
+   "projets": 3,
+   "le": "2026-11-14"
+  },
+  "38": {
+   "resultats": 10,
+   "projets": 1,
+   "le": "2026-11-14"
+  },
+  "39": {
+   "resultats": 17,
+   "projets": 0,
+   "le": "2026-11-14"
+  },
+  "40": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-03"
+  },
+  "41": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-14"
+  },
+  "42": {
+   "resultats": 16,
+   "projets": 3,
+   "le": "2026-11-13"
+  },
+  "43": {
+   "resultats": 5,
+   "projets": 1,
+   "le": "2026-11-13"
+  },
+  "44": {
+   "resultats": 8,
+   "projets": 3,
+   "le": "2026-11-13"
+  },
+  "45": {
+   "resultats": 18,
+   "projets": 4,
+   "le": "2026-11-03"
+  },
+  "46": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-14"
+  },
+  "47": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-14"
+  },
+  "48": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-14"
+  },
+  "49": {
+   "resultats": 28,
+   "projets": 3,
+   "le": "2026-11-14"
+  },
+  "50": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-14"
+  },
+  "51": {
+   "resultats": 22,
+   "projets": 2,
+   "le": "2026-11-02"
+  },
+  "52": {
+   "resultats": 55,
+   "projets": 9,
+   "le": "2026-11-03"
+  },
+  "53": {
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-14"
+  },
+  "54": {
+   "resultats": 28,
+   "projets": 2,
+   "le": "2026-11-03"
+  },
+  "55": {
+   "resultats": 24,
+   "projets": 7,
+   "le": "2026-11-03"
+  },
+  "56": {
+   "resultats": 30,
+   "projets": 0,
+   "le": "2026-11-02"
+  },
+  "57": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-02"
+  },
+  "58": {
+   "resultats": 76,
+   "projets": 19,
+   "le": "2026-11-03"
+  },
+  "59": {
+   "resultats": 58,
+   "projets": 20,
+   "le": "2026-11-03"
+  },
+  "60": {
+   "resultats": 35,
+   "projets": 4,
+   "le": "2026-11-03"
+  },
+  "61": {
+   "resultats": 20,
+   "projets": 3,
+   "le": "2026-11-03"
+  },
+  "62": {
+   "resultats": 2,
+   "projets": 1,
+   "le": "2026-11-03"
+  },
+  "63": {
+   "resultats": 1,
+   "projets": 1,
+   "le": "2026-11-03"
+  },
+  "64": {
+   "resultats": 20,
+   "projets": 7,
+   "le": "2026-11-05"
+  },
+  "65": {
+   "resultats": 23,
+   "projets": 9,
+   "le": "2026-11-05"
+  },
+  "66": {
+   "resultats": 37,
+   "projets": 3,
+   "le": "2026-11-05"
+  },
+  "67": {
+   "resultats": 42,
+   "projets": 2,
+   "le": "2026-11-06"
+  },
+  "68": {
+   "resultats": 1,
+   "projets": 0,
+   "le": "2026-11-04"
+  },
+  "69": {
+   "resultats": 30,
+   "projets": 0,
+   "le": "2026-11-04"
+  },
+  "70": {
+   "resultats": 115,
+   "projets": 17,
+   "le": "2026-11-06"
+  },
+  "71": {
+   "resultats": 10,
+   "projets": 1,
+   "le": "2026-11-05"
+  },
+  "72": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-04"
+  },
+  "73": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-04"
+  },
+  "74": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-04"
+  },
+  "76": {
+   "resultats": 1,
+   "projets": 0,
+   "le": "2026-11-04"
+  },
+  "77": {
+   "resultats": 10,
+   "projets": 1,
+   "le": "2026-11-04"
+  },
+  "78": {
+   "resultats": 1,
+   "projets": 0,
+   "le": "2026-11-05"
+  },
+  "79": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-05"
+  },
+  "80": {
+   "resultats": 22,
+   "projets": 4,
+   "le": "2026-11-05"
+  },
+  "81": {
+   "resultats": 48,
+   "projets": 7,
+   "le": "2026-11-05"
+  },
+  "82": {
+   "resultats": 30,
+   "projets": 1,
+   "le": "2026-11-05"
+  },
+  "83": {
+   "resultats": 47,
+   "projets": 20,
+   "le": "2026-11-07"
+  },
+  "84": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-05"
+  },
+  "85": {
+   "resultats": 116,
+   "projets": 0,
+   "le": "2026-11-07"
+  },
+  "86": {
+   "resultats": 10,
+   "projets": 0,
+   "le": "2026-11-08"
+  },
+  "87": {
+   "resultats": 7,
+   "projets": 2,
+   "le": "2026-11-08"
+  },
+  "88": {
+   "resultats": 58,
+   "projets": 11,
+   "le": "2026-11-09"
+  },
+  "89": {
+   "resultats": 144,
+   "projets": 1,
+   "le": "2026-11-09"
+  },
+  "90": {
+   "resultats": 10,
+   "projets": 2,
+   "le": "2026-11-11"
+  },
+  "91": {
+   "resultats": 2,
+   "projets": 0,
+   "le": "2026-11-11"
+  },
+  "92": {
+   "resultats": 3,
+   "projets": 1,
+   "le": "2026-11-11"
+  },
+  "93": {
+   "resultats": 16,
+   "projets": 0,
+   "le": "2026-11-09"
+  },
+  "94": {
+   "resultats": 3,
+   "projets": 0,
+   "le": "2026-11-09"
+  },
+  "95": {
+   "resultats": 7,
+   "projets": 3,
+   "le": "2026-11-09"
+  }
+ },
+ "documents_lus": 11,
+ "documents_en_attente": 0,
+ "projets": {
+  "total": 3936,
+  "avec_poste": 2000,
+  "puissance_inconnue": 1199,
+  "pv": 2397,
+  "eol": 1498,
+  "bess": 90
+ },
+ "duree_s": 2008
+}
