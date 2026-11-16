@@ -1,17 +1,17 @@
 {
- "collecte": "2026-11-15",
- "depuis": "2020-11-15",
+ "collecte": "2026-11-16",
+ "depuis": "2020-11-16",
  "sources": {
-  "pe": 2653,
-  "novae": 1062,
+  "pe": 2670,
+  "novae": 1075,
   "mrae": 1653,
-  "pref": 305
+  "pref": 327
  },
  "sources_date": {
-  "pe": "2026-11-09",
-  "novae": "2026-11-09",
-  "mrae": "2026-11-09",
-  "pref": "2026-11-15"
+  "pe": "2026-11-16",
+  "novae": "2026-11-16",
+  "mrae": "2026-11-16",
+  "pref": "2026-11-16"
  },
  "prefectures": {
   "01": {
@@ -158,13 +158,13 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-15"
+   "le": "2026-11-16"
   },
   "31": {
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-15"
+   "le": "2026-11-16"
   },
   "32": {
    "resultats": 17,
@@ -215,7 +215,7 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "Remote end closed connection without response",
-   "le": "2026-11-15"
+   "le": "2026-11-16"
   },
   "42": {
    "resultats": 16,
@@ -238,22 +238,20 @@
    "le": "2026-11-15"
   },
   "46": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-15"
+   "resultats": 108,
+   "projets": 25,
+   "le": "2026-11-16"
   },
   "47": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-15"
+   "resultats": 70,
+   "projets": 15,
+   "le": "2026-11-16"
   },
   "48": {
    "resultats": 0,
    "projets": 0,
    "erreur": "Remote end closed connection without response",
-   "le": "2026-11-15"
+   "le": "2026-11-16"
   },
   "49": {
    "resultats": 28,
@@ -264,7 +262,7 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "Remote end closed connection without response",
-   "le": "2026-11-15"
+   "le": "2026-11-16"
   },
   "51": {
    "resultats": 20,
@@ -282,14 +280,16 @@
    "le": "2026-11-15"
   },
   "54": {
-   "resultats": 28,
-   "projets": 2,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "55": {
-   "resultats": 24,
-   "projets": 7,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "56": {
    "resultats": 10,
@@ -302,34 +302,40 @@
    "le": "2026-11-15"
   },
   "58": {
-   "resultats": 76,
-   "projets": 19,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "59": {
-   "resultats": 58,
-   "projets": 20,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "60": {
-   "resultats": 35,
-   "projets": 4,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "61": {
-   "resultats": 20,
-   "projets": 3,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "62": {
-   "resultats": 2,
-   "projets": 1,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "63": {
-   "resultats": 1,
-   "projets": 1,
-   "le": "2026-11-03"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "64": {
    "resultats": 20,
@@ -352,9 +358,10 @@
    "le": "2026-11-06"
   },
   "68": {
-   "resultats": 1,
+   "resultats": 0,
    "projets": 0,
-   "le": "2026-11-04"
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-16"
   },
   "69": {
    "resultats": 30,
@@ -487,15 +494,15 @@
    "le": "2026-11-09"
   }
  },
- "documents_lus": 5,
+ "documents_lus": 87,
  "documents_en_attente": 0,
  "projets": {
-  "total": 3934,
-  "avec_poste": 2000,
-  "puissance_inconnue": 1197,
-  "pv": 2399,
-  "bess": 91,
-  "eol": 1494
+  "total": 3949,
+  "avec_poste": 2005,
+  "puissance_inconnue": 1204,
+  "pv": 2411,
+  "bess": 93,
+  "eol": 1498
  },
- "duree_s": 1948
+ "duree_s": 3090
 }
