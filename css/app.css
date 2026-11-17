@@ -314,3 +314,9 @@ a { color: var(--accent); }
 .lg-hta { display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--hta); vertical-align: middle; }
 @media (max-width: 760px) { .hta-cap select { font-size: 16px; } }
 .cost .row.refac span, .cost .row.refac b { color: var(--ok); }
+
+.pin-hta { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 11px/1 var(--f-mono); background: #fff; color: var(--hta); border: 2px solid var(--hta); box-shadow: 0 1px 3px rgb(0 0 0 / .3); }
+.pin-hta.cur { background: var(--hta); color: #fff; border-color: #fff; width: 22px; height: 22px; }
+.pin-hta.rej { color: #868e96; border-color: #868e96; text-decoration: line-through; opacity: .85; }
+.hta-seen { list-style: none; margin: 0; padding: 0 0 0 8px; border-left: 3px solid var(--line); font-size: 12px; color: var(--muted); display: grid; gap: 2px; }
+.hta-capline { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }

@@ -334,7 +334,8 @@
       const body = [
         ["Conclusion", { content: H.status.t, colSpan: 3 }],
       ];
-      if (H.best) body.push(["Ligne HTA la plus proche", `${H.best.type}, ${kmTxt(H.best.d)} à vol d'oiseau`, "Commune", H.best.com || "—"]);
+      if (H.seen && H.seen.length) body.push(["Tronçons écartés", { content: H.seen.join(" ; "), colSpan: 3 }]);
+      if (H.best) body.push([H.n > 1 ? `Tronçon retenu (n° ${H.cur + 1})` : "Ligne HTA la plus proche", `${H.best.type}, ${kmTxt(H.best.d)} à vol d'oiseau`, "Commune", H.best.com || "—"]);
       if (hc) body.push(
         ["Longueur de liaison", hc.estimated ? `${kmTxt(hc.L_m)} (vol d'oiseau × ${fmt(d.pr.kDet, 2)})` : `${kmTxt(hc.L_m)} (trajet ${H.routeSrc === "OSM" ? "OSM" : "IGN"})`, "Capacité HTA (outil Enedis)", H.cap || "non renseignée"],
         ["Quote-part S3REnR", !hc.rf.qpDue ? "non due (≤ 250 kVA)" : hc.qp !== null ? `${fmt(hc.qp, 2)} k€/MW × ${fmt(d.p)} MW = ${kE(hc.qpart)}` : "—",
