@@ -611,7 +611,8 @@
           lat: p.lat, lon: p.lon, v: p.v, cap, cls: capClass(cap, pr.p), d: r.d, route: r.route, routeSrc: r.routeSrc, routeGeom: r.routeGeom, cost: costFor(r, pr), etf: etfOf(p) };
       }),
       projets: state.projects.map((x) => ({ label: x.label, kind: x.kind, n: x.n, t: x.t, mw: x.mw, mwh: x.mwh, st: x.st, pr: x.pr, date: x.d, com: x.com, dep: x.dep,
-        d: x.d0, dP: x.dP, lat: x.lat, lon: x.lon, same: x.same, geo: x.geo, rac: x.rac.map((r) => r.n + (r.km ? ` (${fmt(r.km, 0)} km)` : "")), src: x.src })),
+        d: x.d0, dP: x.dP, lat: x.lat, lon: x.lon, same: x.same,
+        arcs: racTargets(x).map(({ r, i, p }) => ({ lat: p.lat, lon: p.lon, alt: i > 0, hit: !!(idx >= 0 && state.results[idx] && keyOf(state.results[idx].p) === r.k) })), geo: x.geo, rac: x.rac.map((r) => r.n + (r.km ? ` (${fmt(r.km, 0)} km)` : "")), src: x.src })),
       zone: (() => { const A = projArea(); return { R: A.R, centers: A.centers, rings: unionRings(A.centers, A.R) }; })(),
       projMeta: state.projMeta,
       hta: (() => {
@@ -1129,6 +1130,26 @@
       `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>${ko ? ` <span class="pm">${fmtKo(ko)}</span>` : ""}</li>`).join("")}</ul>`).join("");
     return projTip(p, selKey, true) + (docs.length ? `<div class="pdocs"><div class="dh">Documents trouvés (${docs.length})</div>${html}</div>` : `<div class="pm">Aucun document en ligne trouvé.</div>`);
   }
+  // arc entre un projet et son poste de raccordement : courbe de Bézier quadratique, flèche vers la droite du trajet
+  function arcPts(a, b, bend = 0.18, n = 24) {
+    const kx = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+    const ax = a.lon * kx, ay = a.lat, bx = b.lon * kx, by = b.lat;
+    const mx = (ax + bx) / 2, my = (ay + by) / 2, dx = bx - ax, dy = by - ay;
+    const cx = mx - dy * bend, cy = my + dx * bend; // point de contrôle décalé perpendiculairement
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, u = 1 - t;
+      out.push([u * u * ay + 2 * u * t * cy + t * t * by, (u * u * ax + 2 * u * t * cx + t * t * bx) / kx]);
+    }
+    return out;
+  }
+  const posteByKey = (k) => {
+    if (!state._pk || state._pk.size !== state.postes.length) state._pk = new Map(state.postes.map((p) => [keyOf(p), p]));
+    const p = state._pk.get(k); return p && placed(p) ? p : null;
+  };
+  // postes de raccordement envisagés d'un projet, avec leur position (première option = la plus probable)
+  const racTargets = (p) => p.rac.map((r, i) => ({ r, i, p: posteByKey(r.k) })).filter((x) => x.p);
+
   function drawProjects(A) {
     lyrProj.clearLayers(); lyrRadius.clearLayers();
     for (const ring of unionRings(A.centers, A.R))
@@ -1139,7 +1160,14 @@
     // les projets sur le poste étudié sont dessinés en dernier (au-dessus)
     for (const p of [...state.projects].reverse()) {
       const t0 = p.t[0] || "pv", man = p.kind === "local" || p.kind === "import";
-      if (p.same) L.polyline([[p.lat, p.lon], [A.sel.p.lat, A.sel.p.lon]], { color: css("--accent"), weight: 2, dashArray: "2 6", opacity: 0.9, interactive: false }).addTo(lyrProj);
+      // arcs vers le ou les postes de raccordement envisagés (options suivantes en pointillés)
+      for (const { r, i, p: ps } of racTargets(p)) {
+        const hit = r.k === selKey;
+        L.polyline(arcPts(p, ps), {
+          color: hit ? css("--accent") : css(`--${t0}`) || css("--proj"), weight: hit ? 2.6 : i === 0 ? 1.8 : 1.3,
+          opacity: hit ? 0.95 : i === 0 ? 0.75 : 0.5, dashArray: i === 0 ? null : "3 5", interactive: false,
+        }).addTo(lyrProj);
+      }
       const sz = p.same ? 20 : 13;
       L.marker([p.lat, p.lon], {
         icon: L.divIcon({ className: "", html: `<div class="pin-p t-${t0}${p.same ? " same" : ""}${man ? " man" : ""}${p.geo === "c" ? " approx" : ""}"><span>${p.same ? "⚡" : ""}</span></div>`, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }),

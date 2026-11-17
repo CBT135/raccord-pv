@@ -143,6 +143,16 @@
       g.setLineDash([]); g.globalAlpha = 1;
     }
 
+    // arcs projets → postes de raccordement envisagés
+    for (const pr of d.projets) for (const a of pr.arcs || []) {
+      const [x1, y1] = P(pr.lat, pr.lon), [x2, y2] = P(a.lat, a.lon);
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, cx = mx + (y2 - y1) * 0.18, cy = my - (x2 - x1) * 0.18;
+      g.beginPath(); g.moveTo(x1, y1); g.quadraticCurveTo(cx, cy, x2, y2);
+      g.strokeStyle = a.hit ? rgb(C.accent) : rgb(C[pr.t[0] || "pv"]); g.lineWidth = a.hit ? 2.4 : a.alt ? 1.1 : 1.6;
+      g.globalAlpha = a.hit ? 0.95 : a.alt ? 0.45 : 0.7; g.setLineDash(a.alt ? [3, 5] : []); g.stroke();
+      g.setLineDash([]); g.globalAlpha = 1;
+    }
+
     // marqueurs (projets, postes, site), puis étiquettes placées sans se chevaucher
     const marks = [], selP = d.postes[d.sel] || null, [selX, selY] = selP ? P(selP.lat, selP.lon) : [0, 0];
     const projs = [...d.projets].sort((a, b) => a.same - b.same); // projets du poste étudié au-dessus
@@ -150,7 +160,6 @@
       const [x, y] = P(pr.lat, pr.lon); if (x < 6 || y < 6 || x > W - 6 || y > H - 6) continue;
       pr.onMap = true;
       const t0 = pr.t[0] || "pv", col = rgb(C[t0]), r = pr.same ? 7.5 : 5;
-      if (pr.same && selP) { g.setLineDash([2, 5]); g.lineWidth = 2; g.strokeStyle = rgb(C.accent); g.beginPath(); g.moveTo(x, y); g.lineTo(selX, selY); g.stroke(); g.setLineDash([]); }
       g.save(); g.translate(x, y);
       g.fillStyle = col; g.strokeStyle = "#fff"; g.lineWidth = pr.same ? 2.5 : 1.6;
       if (t0 === "eol") { g.beginPath(); g.arc(0, 0, r, 0, 2 * Math.PI); g.fill(); g.stroke(); }
