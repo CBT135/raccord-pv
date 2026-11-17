@@ -86,9 +86,24 @@ Champs Capareseau conservés (voir `site/datas/AttributeConfig.json` sur capares
 
 ## Raccordement sur le réseau HTA existant
 
-Pour les petits projets (2 MW par défaut, réglable dans « Raccordement sur le réseau HTA existant »), l'outil lit autour du site le tracé des lignes HTA aériennes et souterraines de l'[open data Enedis](https://opendata.enedis.fr/) (mis à jour deux fois par an), repère le point de ligne le plus proche, calcule la liaison par le trajet piéton et en estime le coût : quote-part S3REnR (due au-delà de 250 kVA), liaison HTA dimensionnée comme pour les postes, travaux sur la ligne (coupure d'artère, 50 k€ par défaut) et poste de livraison, sans cellule au poste source.
+Pour les petits projets (2 MW par défaut, réglable dans « Raccordement sur le réseau HTA existant »), l'outil lit autour du site le tracé des lignes HTA aériennes et souterraines de l'[open data Enedis](https://opendata.enedis.fr/) (mis à jour deux fois par an), repère le point de ligne le plus proche, calcule la liaison par le trajet piéton et en estime le coût : quote-part S3REnR (due au-delà de 250 kVA) et travaux au [barème de raccordement Enedis V8](https://www.cre.fr/fileadmin/Documents/Deliberations/2026/260728_2026-160_Bareme_de_raccordement_Enedis_Annexe.pdf) en vigueur depuis le 28/10/2026 : extension HTA (§ 7.4, ZFA : 6 183 € + 3 863 € de parts fixes, 145 €/m sur les 400 premiers mètres puis 107 €/m ; ZFB : 7 980 € + 3 506 €, 202 €/m, sur devis au-delà de 400 m) et armoire de coupure HTA (§ 19, 25 631 €), en € HT ; plus le poste de livraison, sans cellule au poste source.
 
 Le tracé Enedis ne donne ni section ni charges : la capacité d'accueil de la ligne se lit dans la [cartographie des capacités réseau Enedis](https://mon-compte-entreprise.enedis.fr/cartographie-capacites-reseau) (Espace Entreprise, bouton « Capacités Enedis » : la page s'ouvre dans un nouvel onglet et l'adresse du site est copiée pour la coller dans sa recherche), puis se reporte dans le pavé « Réseau HTA ». Si la classe de capacité couvre la puissance du projet, le réseau HTA est présenté en tête comme solution prioritaire ; sinon il passe après les postes sources. Le pavé et le rapport PDF comparent son coût à celui du poste source le moins cher.
+
+## Réfaction tarifaire
+
+Pour les producteurs EnR de moins de 5 MW, la réfaction de l'arrêté du 30 novembre 2017 modifié par l'arrêté du 22 mars 2022 (art. 3, régions dotées d'un S3REnR) est déduite, pour le réseau HTA comme pour les postes sources (case « Réfaction tarifaire », cochée par défaut) :
+
+| Puissance P (MW) | Ouvrages (extension, liaison, cellules) | Quote-part S3REnR |
+|---|---|---|
+| P ≤ 0,25 | 60 % | non due |
+| 0,25 < P ≤ 0,5 | 60 % | 60 % − (P − 0,25) × 80 % |
+| 0,5 < P ≤ 1 | 40 % | 40 % − (P − 0,5) × 40 % |
+| 1 < P ≤ 3 | 40 % − (P − 1) × 10 % | 20 % − (P − 1) × 10 % |
+| 3 < P < 5 | 40 % − (P − 1) × 10 % | 0 |
+| P ≥ 5 | 0 | 0 |
+
+Le poste de livraison, ouvrage du producteur, n'est pas concerné.
 
 ## ETF S3REnR du poste
 

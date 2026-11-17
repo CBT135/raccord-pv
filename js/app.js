@@ -40,7 +40,7 @@
     tphi: Math.max(-1, Math.min(1, num($("#tphi").value) ?? 0)), kIz: Math.max(0.3, num($("#kIz").value) || 1),
     p240: Math.max(0, num($("#p240").value) ?? 11.8),
     htaOn: $("#htaOn").checked, htaPmax: Math.max(0, num($("#htaPmax").value) ?? 2),
-    htaDmax: Math.min(10, Math.max(0.1, num($("#htaDmax").value) || 2)), cHta: (num($("#cHta").value) ?? 50) * 1e3,
+    htaDmax: Math.min(10, Math.max(0.1, num($("#htaDmax").value) || 2)), htaZone: $("#htaZone").value === "ZFB" ? "ZFB" : "ZFA", htaArm: $("#htaArm").checked, refac: $("#refac").checked,
     htaCap: $("#htaCap").value,
   });
   const capOf = (p) => num(p.v.INFO_NA);
@@ -342,11 +342,11 @@
     ["nom", "#nom"], ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
     ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"], ["tpv", "#t_pv"], ["teol", "#t_eol"], ["tbess", "#t_bess"], ["pu", "#projUnknown"],
     ["ml", "#cMl"], ["ml2", "#cMl2"], ["mlb", "#cMlB"], ["ml2b", "#cMl2B"], ["pcab", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"], ["kv", "#kV"], ["du", "#duMax"], ["p240", "#p240"], ["tphi", "#tphi"], ["kiz", "#kIz"],
-    ["hta", "#htaOn"], ["hpm", "#htaPmax"], ["hdm", "#htaDmax"], ["chta", "#cHta"], ["hcap", "#htaCap"],
+    ["hta", "#htaOn"], ["hpm", "#htaPmax"], ["hdm", "#htaDmax"], ["hz", "#htaZone"], ["harm", "#htaArm"], ["hcap", "#htaCap"], ["rf", "#refac"],
   ];
   const COST_KEYS = ["ml", "ml2", "mlb", "ml2b", "pcab", "cell", "pdl", "k"];
   const CAB_KEYS = ["kv", "du", "tphi", "kiz", "p240"];
-  const HTA_KEYS = ["hta", "hpm", "hdm", "chta"];
+  const HTA_KEYS = ["hta", "hpm", "hdm", "hz", "harm"];
   const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
   function setTitle() { const n = $("#nom").value.trim(); document.title = n ? `${n} · Raccord PV` : "Raccord PV"; }
   function writeHash() {
@@ -487,6 +487,21 @@
     return { ...r, best: null, added: 0, fail: true, ref: r, calc };
   }
 
+  /* ---------- réfaction tarifaire des producteurs EnR ----------
+   * Arrêté du 30 novembre 2017 modifié par l'arrêté du 22 mars 2022, art. 3 (régions dotées d'un S3REnR), P en MW :
+   *   ouvrages propres : 60 % jusqu'à 500 kW ; 40 % jusqu'à 1 MW ; 40 % − (P − 1) × 10 % de 1 à 5 MW ; rien au-delà ;
+   *   quote-part : non due jusqu'à 250 kVA ; 60 % − (P − 0,25) × 80 % jusqu'à 500 kW ; 40 % − (P − 0,5) × 40 % jusqu'à 1 MW ;
+   *                20 % − (P − 1) × 10 % jusqu'à 3 MW ; rien au-delà. */
+  function refacRates(P, on = true) {
+    const clamp = (x) => Math.max(0, Math.min(1, x));
+    const qpDue = P > 0.25;
+    if (!on) return { op: 0, qp: 0, qpDue };
+    const op = P <= 0.5 ? 0.6 : P <= 1 ? 0.4 : P < 5 ? 0.4 - (P - 1) * 0.1 : 0;
+    const qp = !qpDue ? 0 : P <= 0.5 ? 0.6 - (P - 0.25) * 0.8 : P <= 1 ? 0.4 - (P - 0.5) * 0.4 : P <= 3 ? 0.2 - (P - 1) * 0.1 : 0;
+    return { op: clamp(op), qp: clamp(qp), qpDue };
+  }
+  const pct = (x) => fmt(x * 100, x * 100 % 1 ? 1 : 0) + " %";
+
   function costFor(r, pr) {
     const qp = num(r.p.v.INFO_QP); // k€/MW
     const L_m = r.route ?? r.d * pr.kDet;
@@ -496,11 +511,19 @@
     const prixMl = cab.best ? cab.best.prix : pr.cMl2, prixMlB = cab.best ? cab.best.prixB : pr.cMl2B;
     const liaison = cab.best ? cab.best.liaison : L_m * (prixMl + (dep - 1) * prixMlB);
     const cell = dep * pr.cCell, pdl = dep * pr.cPdl;
-    const qpart = qp !== null ? qp * 1e3 * pr.p : NaN;
-    const raccord = liaison + cell + (Number.isFinite(qpart) ? qpart : 0);
-    return { qp, L_m, dep, depP, cab, prixMl, prixMlB, liaison, cell, qpart, pdl, raccord, total: raccord + pdl, estimated: r.route === null };
+    const rf = refacRates(pr.p, pr.refac);
+    const qpart = qp !== null ? (rf.qpDue ? qp * 1e3 * pr.p : 0) : NaN;
+    const refOP = rf.op * (liaison + cell), refQP = Number.isFinite(qpart) ? rf.qp * qpart : 0;
+    const raccord = liaison + cell + (Number.isFinite(qpart) ? qpart : 0) - refOP - refQP;
+    return { qp, L_m, dep, depP, cab, prixMl, prixMlB, liaison, cell, qpart, rf, refOP, refQP, pdl, raccord, total: raccord + pdl, estimated: r.route === null };
   }
 
+  function refacRows(c) {
+    let h = "";
+    if (c.refOP > 0) h += `<div class="row refac"><span>Réfaction ${pct(c.rf.op)} sur les ouvrages</span><b>− ${keur(c.refOP)}</b></div>`;
+    if (c.refQP > 0) h += `<div class="row refac"><span>Réfaction ${pct(c.rf.qp)} sur la quote-part</span><b>− ${keur(c.refQP)}</b></div>`;
+    return h;
+  }
   function cabLine(c, pr) {
     const b = c.cab.best;
     if (!b) return `Câble : ni le 240 ni le 400 mm² ne tiennent ${fmt(pr.duMax, 1)} % de chute de tension, même avec ${c.dep + 6} câbles (${fmt(Math.abs(c.cab.rows.at(-1).du), 1)} % en 400 mm² avec ${c.dep} câble${c.dep > 1 ? "s" : ""})`;
@@ -549,10 +572,11 @@
         <div class="chips">${chips.join("")}</div>
         ${tvx}
         <div class="cost">
-          <div class="row"><span>Quote-part S3REnR (${fmt(pr.p)} MW)</span><b>${keur(c.qpart)}</b></div>
+          <div class="row"><span>Quote-part S3REnR (${fmt(pr.p)} MW)</span><b>${c.rf.qpDue ? keur(c.qpart) : "non due ≤ 250 kVA"}</b></div>
           <div class="row"><span>Liaison HTA ${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.prixMl, 0)} €/m${c.dep > 1 ? ` + ${c.dep > 2 ? c.dep - 1 + " × " : ""}${fmt(c.prixMlB, 0)} €/m (câble doublé)` : ""}</span><b>${keur(c.liaison)}</b></div>
           <div class="cab${c.cab.fail ? " fail" : ""}" title="${esc(cabTitle(c, pr))}">${cabLine(c, pr)}</div>
           <div class="row"><span>${c.dep > 1 ? c.dep + " cellules" : "Cellule"} départ poste source</span><b>${keur(c.cell)}</b></div>
+          ${refacRows(c)}
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
           <div class="row"><span>+ ${c.dep > 1 ? c.dep + " postes" : "poste"} de livraison</span><b>${keur(c.total)}</b></div>
         </div>
@@ -765,18 +789,31 @@
         .bindTooltip(`Point de raccordement HTA envisagé<br>ligne ${esc(h.best.type)}${h.best.com ? " · " + esc(h.best.com) : ""}`, { direction: "top" }).addTo(lyrHta);
     }
   }
+  /* Barème de raccordement Enedis V8 (Enedis-NMO-RAC_009E, approuvé par la délibération CRE n° 2026-160, en vigueur au
+   * 28/10/2026), § 7.4 extensions HTA et § 19 armoire de coupure, en € HT :
+   * (CFha + L × CvE) + CFda + Cf, CvE dégressif au-delà de 400 m (ZFB au-delà de 400 m : sur devis). */
+  const BAREME = {
+    ref: "barème Enedis V8 (28/10/2026)",
+    ZFA: { fha: 6183, fda: 3863, cv1: 145, cv2: 107 },
+    ZFB: { fha: 7980, fda: 3506, cv1: 202, cv2: null },
+    arm: 25631,
+  };
   function htaCost(pr) {
     const h = state.hta; if (!h || !h.best) return null;
     const L_m = h.route ?? h.best.d * pr.kDet;
-    const cab = cableSizing(pr.p, L_m / 1000, pr, 1);
-    const b = cab.best;
-    const liaison = b ? b.liaison : L_m * pr.cMl2;
+    const cab = cableSizing(pr.p, L_m / 1000, pr, 1); // contrôle de chute de tension sur la liaison
+    const z = BAREME[pr.htaZone];
+    const devis = z.cv2 === null && L_m > 400 || pr.p > 0.5 && pr.htaZone === "ZFB" && L_m > 400;
+    const cv = Math.min(L_m, 400) * z.cv1 + Math.max(0, L_m - 400) * (z.cv2 ?? z.cv1);
+    const ext = z.fha + cv + z.fda, arm = pr.htaArm ? BAREME.arm : 0, travaux = ext + arm;
     // quote-part S3REnR : celle de la région (poste Capareseau le plus proche qui la publie)
     const qpP = state.postes.filter((p) => placed(p) && num(p.v.INFO_QP) !== null).map((p) => ({ p, d: haversine(h.site, p) })).sort((a, b2) => a.d - b2.d)[0];
     const qp = qpP ? num(qpP.p.v.INFO_QP) : null;
-    const qpart = qp !== null && pr.p > 0.25 ? qp * 1e3 * pr.p : 0;
-    const raccord = liaison + pr.cHta + qpart;
-    return { L_m, cab, liaison, qp, qpPoste: qpP?.p, qpart, travaux: pr.cHta, raccord, pdl: pr.cPdl, total: raccord + pr.cPdl, estimated: h.route === null };
+    const rf = refacRates(pr.p, pr.refac);
+    const qpart = qp !== null && rf.qpDue ? qp * 1e3 * pr.p : 0;
+    const refOP = rf.op * travaux, refQP = rf.qp * qpart;
+    const raccord = travaux + qpart - refOP - refQP;
+    return { L_m, cab, z, zone: pr.htaZone, cv, ext, arm, travaux, devis, qp, qpPoste: qpP?.p, qpart, rf, refOP, refQP, raccord, pdl: pr.cPdl, total: raccord + pr.cPdl, estimated: h.route === null };
   }
   function htaStatus(pr, c) {
     const h = state.hta;
@@ -812,10 +849,11 @@
         <label class="hta-cap">Capacité HTA lue dans l'outil Enedis
           <select class="hcap"><option value="">non renseignée</option>${Object.entries(HTA_CLASSES).map(([k, v]) => `<option value="${k}"${pr.htaCap === k ? " selected" : ""}>${v.t}</option>`).join("")}</select></label>
         <div class="cost">
-          <div class="row"><span>Quote-part S3REnR${c.qp !== null ? ` (${fmt(c.qp, 2)} k€/MW × ${fmt(pr.p)} MW)` : ""}</span><b>${pr.p > 0.25 ? keur(c.qpart) : "non due"}</b></div>
-          <div class="row"><span>Liaison HTA ${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.cab.best ? c.cab.best.prix : pr.cMl2, 0)} €/m</span><b>${keur(c.liaison)}</b></div>
+          <div class="row"><span>Quote-part S3REnR${c.qp !== null && c.rf.qpDue ? ` (${fmt(c.qp, 2)} k€/MW × ${fmt(pr.p)} MW)` : ""}</span><b>${c.rf.qpDue ? keur(c.qpart) : "non due ≤ 250 kVA"}</b></div>
+          <div class="row" title="${pr.htaZone} : ${fmt(c.z.fha, 0)} € + ${fmt(c.z.fda, 0)} € de parts fixes, ${fmt(c.z.cv1, 0)} €/m sur 400 m${c.z.cv2 ? `, ${fmt(c.z.cv2, 0)} €/m au-delà` : ""}"><span>Extension HTA ${km(c.L_m)}${c.estimated ? " (estimée)" : ""}, barème ${pr.htaZone}${c.devis ? " (sur devis au-delà de 400 m)" : ""}</span><b>${keur(c.ext)}</b></div>
           <div class="cab${c.cab.fail ? " fail" : ""}">${cabLine({ cab: c.cab, dep: 1 }, pr)}</div>
-          <div class="row"><span>Travaux sur la ligne (coupure d'artère)</span><b>${keur(c.travaux)}</b></div>
+          ${c.arm ? `<div class="row"><span>Armoire de coupure HTA</span><b>${keur(c.arm)}</b></div>` : ""}
+          ${refacRows(c)}
           <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
           <div class="row"><span>+ poste de livraison</span><b>${keur(c.total)}</b></div>
         </div>${cmp}` : ""}`;
@@ -1103,7 +1141,8 @@
   $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
   ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) { loadProjects(); renderPrives(); } }));
-  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240", "#cHta", "#htaPmax"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); else renderHta(); }));
+  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240", "#htaPmax"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); else renderHta(); }));
+  ["#htaZone", "#htaArm", "#refac"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.results.length) refreshResults(); else renderHta(); }));
   ["#htaOn", "#htaDmax"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); loadHta(); }));
   // enregistrement des positions corrigées dans le dépôt (js/editor.js)
   function localChanges() {

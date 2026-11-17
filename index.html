@@ -60,6 +60,7 @@
       <label class="check"><input id="withCap" type="checkbox" checked> Uniquement les postes avec capacité restante &gt; 0</label>
       <label class="check"><input id="withRte" type="checkbox"> Inclure les postes RTE sans GRD (raccordement HTB)</label>
       <label class="check"><input id="projYears" type="checkbox" checked> Projets : dossiers diffusés depuis moins de 5 ans</label>
+      <label class="check"><input id="refac" type="checkbox" checked> Réfaction tarifaire des producteurs EnR (projets de moins de 5 MW)</label>
       <details class="hyp">
         <summary>Hypothèses de coût</summary>
         <div class="grid2">
@@ -77,13 +78,14 @@
       <details class="hyp" id="hypHta">
         <summary>Raccordement sur le réseau HTA existant</summary>
         <label class="check"><input id="htaOn" type="checkbox" checked> Étudier un raccordement sur une ligne HTA Enedis proche</label>
+        <label class="check"><input id="htaArm" type="checkbox" checked> Compter une armoire de coupure HTA (25 631 € HT au barème)</label>
         <div class="grid2">
           <label>Puissance max. sur le réseau HTA <span class="unit">MW</span><input id="htaPmax" type="number" step="0.5" min="0" value="2"></label>
           <label>Longueur max. de la liaison <span class="unit">km</span><input id="htaDmax" type="number" step="0.5" min="0.1" value="2"></label>
-          <label>Travaux sur la ligne (coupure d'artère) <span class="unit">k€</span><input id="cHta" type="number" step="5" min="0" value="50"></label>
+          <label>Zone du barème Enedis <span class="unit">–</span><select id="htaZone"><option value="ZFA" selected>ZFA (unité urbaine &lt; 100 000 hab.)</option><option value="ZFB">ZFB (grande unité urbaine)</option></select></label>
           <input id="htaCap" type="text" hidden value="">
         </div>
-        <p class="note">Le tracé des lignes HTA vient de l'open data Enedis (mis à jour deux fois par an), sans section ni charges. La capacité d'accueil de la ligne se lit dans la cartographie des capacités réseau Enedis (Espace Entreprise) et se reporte dans le pavé « Réseau HTA ». Si la ligne a la capacité, le raccordement HTA est proposé en priorité ; sinon le poste source. La quote-part S3REnR reste due au-delà de 250 kVA.</p>
+        <p class="note">Le tracé des lignes HTA vient de l'open data Enedis (mis à jour deux fois par an), sans section ni charges. La capacité d'accueil de la ligne se lit dans la cartographie des capacités réseau Enedis (Espace Entreprise) et se reporte dans le pavé « Réseau HTA ». Si la ligne a la capacité, le raccordement HTA est proposé en priorité ; sinon le poste source. Le coût des travaux suit le barème de raccordement Enedis V8 (au 28/10/2026, § 7.4 et 19) : parts fixes hors terrain et dans le terrain, part variable au mètre (400 premiers mètres, puis au-delà), armoire de coupure.</p>
       </details>
       <details class="hyp" id="hypCab">
         <summary>Câble HTA (chute de tension)</summary>

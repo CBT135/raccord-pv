@@ -313,3 +313,4 @@ a { color: var(--accent); }
 .chip.okc { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
 .lg-hta { display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--hta); vertical-align: middle; }
 @media (max-width: 760px) { .hta-cap select { font-size: 16px; } }
+.cost .row.refac span, .cost .row.refac b { color: var(--ok); }

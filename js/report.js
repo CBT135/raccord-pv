@@ -34,7 +34,7 @@
   /* ---------- texte : jsPDF (polices standard) n'accepte que le jeu Windows-1252 ---------- */
   const WIN = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
   const T = (s) => String(s ?? "").replace(/[    ]/g, " ").replace(/≥/g, ">=").replace(/≤/g, "<=")
-    .replace(/φ/g, "phi").replace(/ΔU/g, "dU").replace(/Δ/g, "d").replace(/Ω/g, "ohm")
+    .replace(/φ/g, "phi").replace(/ΔU/g, "dU").replace(/Δ/g, "d").replace(/Ω/g, "ohm").replace(/−/g, "-")
     .replace(/[^\x00-\xff]/g, (c) => (WIN.includes(c) ? c : "?"));
   const fmt = (n, d = 1) => (n === null || n === undefined || !Number.isFinite(n) ? "—" : n.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }));
   const kE = (e) => (Number.isFinite(e) ? fmt(e / 1e3, 0) + " k€" : "—");
@@ -337,13 +337,15 @@
       if (H.best) body.push(["Ligne HTA la plus proche", `${H.best.type}, ${kmTxt(H.best.d)} à vol d'oiseau`, "Commune", H.best.com || "—"]);
       if (hc) body.push(
         ["Longueur de liaison", hc.estimated ? `${kmTxt(hc.L_m)} (vol d'oiseau × ${fmt(d.pr.kDet, 2)})` : `${kmTxt(hc.L_m)} (trajet ${H.routeSrc === "OSM" ? "OSM" : "IGN"})`, "Capacité HTA (outil Enedis)", H.cap || "non renseignée"],
-        ["Quote-part S3REnR", hc.qp !== null ? `${fmt(hc.qp, 2)} k€/MW × ${fmt(d.p)} MW = ${kE(hc.qpart)}` : "—", "Liaison HTA", `${kE(hc.liaison)}${hc.cab.best ? ` (3×1×${hc.cab.best.s} mm² Alu, ΔU ${fmt(hc.cab.best.du, 1)} %)` : ""}`],
-        ["Travaux sur la ligne", kE(hc.travaux), "Raccordement indicatif", kE(hc.raccord)],
+        ["Quote-part S3REnR", !hc.rf.qpDue ? "non due (≤ 250 kVA)" : hc.qp !== null ? `${fmt(hc.qp, 2)} k€/MW × ${fmt(d.p)} MW = ${kE(hc.qpart)}` : "—",
+          "Extension HTA (barème)", `${kE(hc.ext)} (${hc.zone}${hc.devis ? ", sur devis au-delà de 400 m" : ""})`],
+        ["Armoire de coupure HTA", hc.arm ? kE(hc.arm) : "non comptée", "Réfaction", hc.refOP || hc.refQP ? `− ${kE(hc.refOP + hc.refQP)} (${fmt(hc.rf.op * 100, 0)} % ouvrages, ${fmt(hc.rf.qp * 100, 0)} % quote-part)` : "aucune"],
+        ["Contrôle de chute de tension", hc.cab.best ? `3×1×${hc.cab.best.s} mm² Alu, ΔU ${fmt(hc.cab.best.du, 1)} %` : "à vérifier", "Raccordement indicatif", kE(hc.raccord)],
         ["Poste de livraison", kE(hc.pdl), "Total avec poste de livraison", kE(hc.total)],
       );
       table({ body, columnStyles: kvStyles });
       set(7.5, "normal", C.muted);
-      const nt = doc.splitTextToSize(T("Tracé des lignes HTA : open data Enedis (sans section ni charges). Capacité de la ligne à vérifier dans la cartographie des capacités réseau Enedis ; la simulation Enedis et l'étude du gestionnaire de réseau font foi."), W);
+      const nt = doc.splitTextToSize(T("Tracé des lignes HTA : open data Enedis (sans section ni charges). Travaux au barème de raccordement Enedis V8 (§ 7.4 et 19, € HT), réfaction de l'arrêté du 30/11/2017 modifié le 22/03/2022. Capacité de la ligne à vérifier dans la cartographie des capacités réseau Enedis ; la simulation Enedis et la proposition de raccordement font foi."), W);
       doc.text(nt, M, y - 3); y += nt.length * 3.2;
     }
 
@@ -357,9 +359,11 @@
     table({
       head: [["Poste de coût", "Base de calcul", "Montant"]],
       body: [
-        ["Quote-part S3REnR", c.qp !== null ? `${fmt(c.qp, 2)} k€/MW × ${fmt(d.p)} MW` : "quote-part non publiée", kE(c.qpart)],
+        ["Quote-part S3REnR", !c.rf.qpDue ? "non due (installation ≤ 250 kVA)" : c.qp !== null ? `${fmt(c.qp, 2)} k€/MW × ${fmt(d.p)} MW` : "quote-part non publiée", kE(c.qpart)],
         ["Liaison HTA souterraine", `${kmTxt(c.L_m)} × (${fmt(c.prixMl, 0)} €/m${c.dep > 1 ? ` + ${c.dep > 2 ? c.dep - 1 + " × " : ""}${fmt(c.prixMlB, 0)} €/m câble doublé` : ""})${cb ? `, ${c.dep > 1 ? c.dep + " × " : ""}3×1×${cb.s} mm² Alu` : ""} (${src})`, kE(c.liaison)],
         [`Cellule${c.dep > 1 ? "s" : ""} départ au poste source`, `${c.dep} × ${fmt(d.pr.cCell / 1e3, 0)} k€ (une par câble)`, kE(c.cell)],
+        ...(c.refOP > 0 ? [["Réfaction sur les ouvrages", `${fmt(c.rf.op * 100, 1)} % de la liaison et des cellules (arrêté du 30/11/2017 modifié)`, `− ${kE(c.refOP)}`]] : []),
+        ...(c.refQP > 0 ? [["Réfaction sur la quote-part", `${fmt(c.rf.qp * 100, 1)} % de la quote-part`, `− ${kE(c.refQP)}`]] : []),
         [{ content: "Raccordement", styles: sub }, { content: "", styles: sub }, { content: kE(c.raccord), styles: sub }],
         [`Poste${c.dep > 1 ? "s" : ""} de livraison`, `${c.dep} × ${fmt(d.pr.cPdl / 1e3, 0)} k€ (un par câble)`, kE(c.pdl)],
         [{ content: `Total avec poste${c.dep > 1 ? "s" : ""} de livraison`, styles: { ...sub, textColor: C.accent } }, { content: "", styles: sub }, { content: kE(c.total), styles: { ...sub, textColor: C.accent } }],
