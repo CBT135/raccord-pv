@@ -39,6 +39,9 @@
     kV: Math.min(36, Math.max(5, num($("#kV").value) || 20)), duMax: Math.max(0.5, num($("#duMax").value) || 6),
     tphi: Math.max(-1, Math.min(1, num($("#tphi").value) ?? 0)), kIz: Math.max(0.3, num($("#kIz").value) || 1),
     p240: Math.max(0, num($("#p240").value) ?? 11.8),
+    htaOn: $("#htaOn").checked, htaPmax: Math.max(0, num($("#htaPmax").value) ?? 2),
+    htaDmax: Math.min(10, Math.max(0.1, num($("#htaDmax").value) || 2)), cHta: (num($("#cHta").value) ?? 50) * 1e3,
+    htaCap: $("#htaCap").value,
   });
   const capOf = (p) => num(p.v.INFO_NA);
   function capClass(cap, P) { if (cap === null || cap <= 0) return "none"; return cap >= P ? "ok" : "part"; }
@@ -117,6 +120,8 @@
   const lyrProj = L.layerGroup().addTo(map);
   const lyrRadius = L.layerGroup().addTo(map);
   const lyrPriv = L.layerGroup().addTo(map);
+  const lyrHta = L.layerGroup().addTo(map);
+  overlays["Réseau HTA Enedis (autour du site)"] = lyrHta;
   overlays["Tous les postes Capareseau"] = lyrAll;
   overlays["Postes privés (OSM)"] = lyrPriv;
   overlays["Projets voisins"] = lyrProj;
@@ -337,9 +342,11 @@
     ["nom", "#nom"], ["p", "#p"], ["n", "#n"], ["min", "#minCap"], ["r", "#radius"],
     ["cap", "#withCap"], ["rte", "#withRte"], ["y", "#projYears"], ["tpv", "#t_pv"], ["teol", "#t_eol"], ["tbess", "#t_bess"], ["pu", "#projUnknown"],
     ["ml", "#cMl"], ["ml2", "#cMl2"], ["mlb", "#cMlB"], ["ml2b", "#cMl2B"], ["pcab", "#pDep"], ["cell", "#cCell"], ["pdl", "#cPdl"], ["k", "#kDet"], ["kv", "#kV"], ["du", "#duMax"], ["p240", "#p240"], ["tphi", "#tphi"], ["kiz", "#kIz"],
+    ["hta", "#htaOn"], ["hpm", "#htaPmax"], ["hdm", "#htaDmax"], ["chta", "#cHta"], ["hcap", "#htaCap"],
   ];
   const COST_KEYS = ["ml", "ml2", "mlb", "ml2b", "pcab", "cell", "pdl", "k"];
   const CAB_KEYS = ["kv", "du", "tphi", "kiz", "p240"];
+  const HTA_KEYS = ["hta", "hpm", "hdm", "chta"];
   const DEFAULTS = Object.fromEntries(URL_FIELDS.map(([k, s]) => { const el = $(s); return [k, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value]; }));
   function setTitle() { const n = $("#nom").value.trim(); document.title = n ? `${n} · Raccord PV` : "Raccord PV"; }
   function writeHash() {
@@ -386,6 +393,7 @@
       else if (Number.isFinite(num(raw))) el.value = num(raw);
       if (COST_KEYS.includes(k) && String(num(raw)) !== String(num(DEFAULTS[k]))) costChanged = true;
       if (CAB_KEYS.includes(k) && String(num(raw)) !== String(num(DEFAULTS[k]))) cabChanged = true;
+      if (HTA_KEYS.includes(k) && raw !== DEFAULTS[k]) $("#hypHta").open = true;
     }
     if (costChanged) $(".hyp").open = true; // montre que des hypothèses non standard sont appliquées
     if (cabChanged) $("#hypCab").open = true;
@@ -438,6 +446,7 @@
       if (!map.getBounds().contains(b)) map.fitBounds(b.pad(0.15));
     }
     computeRoutes();
+    loadHta();
     loadProjects();
   }
 
@@ -580,6 +589,11 @@
         d: x.d0, dP: x.dP, lat: x.lat, lon: x.lon, same: x.same, geo: x.geo, rac: x.rac.map((r) => r.n + (r.km ? ` (${fmt(r.km, 0)} km)` : "")), src: x.src })),
       zone: (() => { const A = projArea(); return { R: A.R, centers: A.centers, rings: unionRings(A.centers, A.R) }; })(),
       projMeta: state.projMeta,
+      hta: (() => {
+        const h = state.hta; if (!pr.htaOn || !h || h.loading || h.err) return null;
+        const c = htaCost(pr), st = htaStatus(pr, c || { L_m: Infinity });
+        return { best: h.best, R: h.R, route: h.route, routeSrc: h.routeSrc, routeGeom: h.routeGeom, cost: c, status: st, cap: HTA_CLASSES[pr.htaCap]?.t || null, addr: h.addr };
+      })(),
       cableAt: (n) => { const r = state.results[idx]; const c = costFor(r, pr); return c.cab.calc(n).rows; },
       regionNom: (code) => state.meta?.regions?.[code]?.nom || code,
       extraction: state.meta ? new Date(state.meta.extraction).toLocaleDateString("fr-FR") : null,
@@ -603,6 +617,7 @@
   function refreshResults() {
     if (!state.site) return;
     renderList(nearest(state.site, params().p).firstFull);
+    renderHta();
     document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel));
     drawPostes();
   }
@@ -672,6 +687,160 @@
     if (r.tok !== tok || state.site !== site || !state.results.includes(r)) return;
     if (res) { r.route = res.d; r.routeGeom = res.geom; r.routeSrc = res.src; } else { r.routeSrc = "err"; }
     refreshResults();
+  }
+
+  /* ---------- raccordement sur le réseau HTA existant ----------
+   * Tracé des lignes HTA : open data Enedis (data-fair, jeux reseau-hta et reseau-souterrain-hta), interrogé autour du site.
+   * Pas de section ni de charges dans ces données : la capacité de la ligne se lit dans la cartographie des capacités
+   * réseau Enedis (Espace Entreprise) et se reporte dans le pavé. Priorité au réseau HTA s'il est proche et suffisant. */
+  const ENEDIS_OD = "https://opendata.enedis.fr/data-fair/api/v1/datasets/";
+  const ENEDIS_CAP = "https://mon-compte-entreprise.enedis.fr/cartographie-capacites-reseau";
+  const HTA_CLASSES = { a: { t: "0 – 0,5 MW", lo: 0, hi: 0.5 }, b: { t: "0,5 – 2 MW", lo: 0.5, hi: 2 }, c: { t: "2 – 4 MW", lo: 2, hi: 4 }, d: { t: "> 4 MW", lo: 4, hi: Infinity } };
+  state.hta = null;
+  function nearestOnLines(site, lines) {
+    const r = Math.PI / 180, kx = 111320 * Math.cos(site.lat * r), ky = 110540;
+    const X = (lon) => (lon - site.lon) * kx, Y = (lat) => (lat - site.lat) * ky;
+    let best = null;
+    for (const ln of lines) for (const part of ln.parts) for (let i = 1; i < part.length; i++) {
+      const ax = X(part[i - 1][0]), ay = Y(part[i - 1][1]), bx = X(part[i][0]), by = Y(part[i][1]);
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+      const px = ax + t * dx, py = ay + t * dy, d = Math.hypot(px, py);
+      if (!best || d < best.d) best = { d, lat: site.lat + py / ky, lon: site.lon + px / kx, type: ln.type, com: ln.com };
+    }
+    return best;
+  }
+  async function fetchHtaLines(site, R) {
+    const dLat = R / 110540, dLon = R / (111320 * Math.cos(site.lat * Math.PI / 180));
+    const bbox = [site.lon - dLon, site.lat - dLat, site.lon + dLon, site.lat + dLat].map((x) => x.toFixed(5)).join(",");
+    const get = async (ds, type) => {
+      const r = await fetch(`${ENEDIS_OD}${ds}/lines?bbox=${bbox}&size=10000&format=geojson&select=nom_commune`);
+      if (!r.ok) throw new Error(`Enedis ${r.status}`);
+      const j = await r.json();
+      return (j.features || []).filter((f) => f.geometry).map((f) => ({
+        type, com: f.properties?.nom_commune || "",
+        parts: f.geometry.type === "MultiLineString" ? f.geometry.coordinates : [f.geometry.coordinates],
+      }));
+    };
+    const [a, b] = await Promise.all([get("reseau-hta", "aérienne"), get("reseau-souterrain-hta", "souterraine")]);
+    return a.concat(b);
+  }
+  async function loadHta() {
+    const pr = params();
+    lyrHta.clearLayers();
+    if (!state.site || !pr.htaOn) { state.hta = null; renderHta(); return; }
+    const site = state.site, seq = (state.htaSeq = (state.htaSeq || 0) + 1);
+    const R = Math.min(6000, Math.max(800, pr.htaDmax * 1000 * 1.2));
+    state.hta = { site, R, loading: true };
+    renderHta();
+    const addrP = fetch(`https://data.geopf.fr/geocodage/reverse?lon=${site.lon}&lat=${site.lat}&index=address&limit=1`)
+      .then((r) => (r.ok ? r.json() : null)).then((j) => j?.features?.[0]?.properties?.label || null).catch(() => null);
+    let lines;
+    try { lines = await fetchHtaLines(site, R); } catch (e) {
+      if (seq !== state.htaSeq) return;
+      state.hta = { site, R, err: String(e.message || e) }; renderHta(); return;
+    }
+    if (seq !== state.htaSeq) return;
+    const best = nearestOnLines(site, lines);
+    state.hta = { site, R, lines, best, route: null, routeSrc: null, routeGeom: null, addr: await addrP };
+    if (seq !== state.htaSeq) return;
+    drawHta(); renderHta();
+    if (best) {
+      const res = await fetchRoute(site, best);
+      if (seq !== state.htaSeq) return;
+      if (res) Object.assign(state.hta, { route: res.d, routeSrc: res.src, routeGeom: res.geom }); else state.hta.routeSrc = "err";
+      drawHta(); renderHta();
+    }
+  }
+  function drawHta() {
+    lyrHta.clearLayers();
+    const h = state.hta; if (!h || !h.lines) return;
+    const col = css("--hta") || "#d9480f";
+    for (const ln of h.lines) for (const part of ln.parts)
+      L.polyline(part.map(([x, y]) => [y, x]), { renderer: canvas, color: col, weight: 2, opacity: 0.75, dashArray: ln.type === "aérienne" ? "6 4" : null, interactive: false }).addTo(lyrHta);
+    if (h.best) {
+      if (h.routeGeom) L.geoJSON(h.routeGeom, { style: { color: col, weight: 4, opacity: 0.9 } }).addTo(lyrHta);
+      else L.polyline([[h.site.lat, h.site.lon], [h.best.lat, h.best.lon]], { color: col, weight: 2, dashArray: "2 5" }).addTo(lyrHta);
+      L.circleMarker([h.best.lat, h.best.lon], { radius: 6, color: "#fff", weight: 2, fillColor: col, fillOpacity: 1 })
+        .bindTooltip(`Point de raccordement HTA envisagé<br>ligne ${esc(h.best.type)}${h.best.com ? " · " + esc(h.best.com) : ""}`, { direction: "top" }).addTo(lyrHta);
+    }
+  }
+  function htaCost(pr) {
+    const h = state.hta; if (!h || !h.best) return null;
+    const L_m = h.route ?? h.best.d * pr.kDet;
+    const cab = cableSizing(pr.p, L_m / 1000, pr, 1);
+    const b = cab.best;
+    const liaison = b ? b.liaison : L_m * pr.cMl2;
+    // quote-part S3REnR : celle de la région (poste Capareseau le plus proche qui la publie)
+    const qpP = state.postes.filter((p) => placed(p) && num(p.v.INFO_QP) !== null).map((p) => ({ p, d: haversine(h.site, p) })).sort((a, b2) => a.d - b2.d)[0];
+    const qp = qpP ? num(qpP.p.v.INFO_QP) : null;
+    const qpart = qp !== null && pr.p > 0.25 ? qp * 1e3 * pr.p : 0;
+    const raccord = liaison + pr.cHta + qpart;
+    return { L_m, cab, liaison, qp, qpPoste: qpP?.p, qpart, travaux: pr.cHta, raccord, pdl: pr.cPdl, total: raccord + pr.cPdl, estimated: h.route === null };
+  }
+  function htaStatus(pr, c) {
+    const h = state.hta;
+    if (pr.p > pr.htaPmax) return { k: "off", t: `Projet de ${fmt(pr.p)} MW, au-delà du seuil de ${fmt(pr.htaPmax)} MW retenu pour un raccordement sur le réseau HTA : raccordement au poste source.` };
+    if (!h.best) return { k: "off", t: `Aucune ligne HTA Enedis à moins de ${km(h.R)} du site : raccordement au poste source.` };
+    if (c.L_m > pr.htaDmax * 1000) return { k: "off", t: `Liaison de ${km(c.L_m)}, au-delà des ${fmt(pr.htaDmax)} km retenus : raccordement au poste source.` };
+    const cl = HTA_CLASSES[pr.htaCap];
+    if (!cl) return { k: "verif", t: "Capacité de la ligne à lire dans la cartographie Enedis, puis à reporter ici." };
+    if (pr.p <= cl.lo + 1e-9) return { k: "ok", t: `Capacité de la ligne (${cl.t}) suffisante : raccordement sur le réseau HTA à privilégier.` };
+    if (pr.p <= cl.hi) return { k: "limite", t: `Capacité de la ligne (${cl.t}) peut-être suffisante pour ${fmt(pr.p)} MW : à confirmer par la simulation Enedis.` };
+    return { k: "insuf", t: `Capacité de la ligne (${cl.t}) insuffisante pour ${fmt(pr.p)} MW : raccordement au poste source.` };
+  }
+  function renderHta() {
+    const box = $("#htaBox"); if (!box) return;
+    const pr = params(), h = state.hta;
+    if (!pr.htaOn || !state.site || !h) { box.innerHTML = ""; return; }
+    const btn = `<button type="button" class="ghost enedis">Capacités Enedis ↗</button>`;
+    let body;
+    if (h.loading) body = `<div class="pm">Lecture du réseau HTA Enedis autour du site…</div>`;
+    else if (h.err) body = `<div class="pm">Réseau HTA Enedis indisponible (${esc(h.err)}).</div>`;
+    else {
+      const c = htaCost(pr), st = htaStatus(pr, c || { L_m: Infinity });
+      const near = h.best ? `Ligne ${esc(h.best.type)} la plus proche à <b>${km(h.best.d)}</b> à vol d'oiseau${h.best.com ? ` (${esc(h.best.com)})` : ""} · liaison ${c.estimated ? `estimée ${km(c.L_m)} (vol d'oiseau × ${fmt(pr.kDet, 2)})` : `<b>${km(c.L_m)}</b> par le trajet ${h.routeSrc === "OSM" ? "OSM" : "IGN"}`}` : "";
+      const cmp = (() => {
+        if (!c || !state.results.length) return "";
+        const ps = state.results.map((r, i) => ({ i, t: costFor(r, pr).total, n: r.p.n })).sort((a, b) => a.t - b.t)[0];
+        const dlt = ps.t - c.total;
+        return `<div class="pm">Poste source le moins cher : n° ${ps.i + 1} ${esc(ps.n)}, ${keur(ps.t)} (${dlt >= 0 ? keur(dlt) + " de plus" : keur(-dlt) + " de moins"} que le réseau HTA)</div>`;
+      })();
+      body = `<div class="hta-st st-${st.k}">${esc(st.t)}</div>
+        ${near ? `<div class="hta-near">${near}</div>` : ""}
+        ${c && st.k !== "off" ? `
+        <label class="hta-cap">Capacité HTA lue dans l'outil Enedis
+          <select class="hcap"><option value="">non renseignée</option>${Object.entries(HTA_CLASSES).map(([k, v]) => `<option value="${k}"${pr.htaCap === k ? " selected" : ""}>${v.t}</option>`).join("")}</select></label>
+        <div class="cost">
+          <div class="row"><span>Quote-part S3REnR${c.qp !== null ? ` (${fmt(c.qp, 2)} k€/MW × ${fmt(pr.p)} MW)` : ""}</span><b>${pr.p > 0.25 ? keur(c.qpart) : "non due"}</b></div>
+          <div class="row"><span>Liaison HTA ${km(c.L_m)}${c.estimated ? " (estimée)" : ""} à ${fmt(c.cab.best ? c.cab.best.prix : pr.cMl2, 0)} €/m</span><b>${keur(c.liaison)}</b></div>
+          <div class="cab${c.cab.fail ? " fail" : ""}">${cabLine({ cab: c.cab, dep: 1 }, pr)}</div>
+          <div class="row"><span>Travaux sur la ligne (coupure d'artère)</span><b>${keur(c.travaux)}</b></div>
+          <div class="row tot"><span>Raccordement indicatif</span><b>${keur(c.raccord)}</b></div>
+          <div class="row"><span>+ poste de livraison</span><b>${keur(c.total)}</b></div>
+        </div>${cmp}` : ""}`;
+    }
+    const st = h.loading || h.err ? "" : htaStatus(pr, htaCost(pr) || { L_m: Infinity }).k;
+    box.innerHTML = `<div class="hta-card st-${st}${st === "ok" ? " prio" : ""}">
+      <div class="hta-h"><b>Réseau HTA Enedis</b>${st === "ok" ? `<span class="chip okc">solution prioritaire</span>` : st === "limite" || st === "verif" ? `<span class="chip warn">à vérifier</span>` : st ? `<span class="chip">non retenu</span>` : ""}</div>
+      ${body}
+      <div class="links">${btn}${h.best ? `<a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${h.site.lat},${h.site.lon}&destination=${h.best.lat.toFixed(6)},${h.best.lon.toFixed(6)}" target="_blank" rel="noopener">Itinéraire Google Maps</a>` : ""}</div>
+    </div>`;
+    box.querySelector(".hcap")?.addEventListener("change", (e) => { $("#htaCap").value = e.target.value; writeHash(); renderHta(); });
+    box.querySelector(".enedis").addEventListener("click", openEnedis);
+    // ordre d'affichage : le réseau HTA en tête s'il est la solution à privilégier, sinon après les postes sources
+    const list = $("#list");
+    if (st === "ok" ? box.nextElementSibling !== list : list.nextElementSibling !== box) list.parentNode.insertBefore(box, st === "ok" ? list : list.nextSibling);
+  }
+  function openEnedis() {
+    const h = state.hta, s = state.site;
+    window.open(ENEDIS_CAP, "_blank", "noopener"); // ouvert tout de suite, sinon bloqué comme fenêtre surgissante
+    if (!s) return;
+    const coords = `${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}`;
+    const txt = h?.addr || coords;
+    const done = () => toast(`${h?.addr ? "Adresse" : "Coordonnées"} du site copiée${h?.addr ? "s" : "s"} : « ${txt} ». Collez-la dans la recherche de la cartographie Enedis (connexion à l'Espace Entreprise requise). Coordonnées : ${coords}.`, 9000);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done, () => toast(`Recherchez dans la cartographie Enedis : « ${txt} » (${coords}).`, 9000));
+    else toast(`Recherchez dans la cartographie Enedis : « ${txt} » (${coords}).`, 9000);
   }
 
   /* ---------- projets voisins (PV, éolien, stockage ≥ 1 MW) ----------
@@ -934,7 +1103,8 @@
   $("#nom").addEventListener("input", () => { setTitle(); writeHash(); });
   ["#t_pv", "#t_eol", "#t_bess", "#projUnknown"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); refreshProjects(); }));
   ["#radius", "#projYears"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); if (state.site) { loadProjects(); renderPrives(); } }));
-  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); }));
+  ["#cMl", "#cMl2", "#cMlB", "#cMl2B", "#pDep", "#cCell", "#cPdl", "#kDet", "#kV", "#duMax", "#tphi", "#kIz", "#p240", "#cHta", "#htaPmax"].forEach((s) => $(s).addEventListener("input", () => { writeHash(); if (state.results.length) refreshResults(); else renderHta(); }));
+  ["#htaOn", "#htaDmax"].forEach((s) => $(s).addEventListener("change", () => { writeHash(); loadHta(); }));
   // enregistrement des positions corrigées dans le dépôt (js/editor.js)
   function localChanges() {
     const ch = {};

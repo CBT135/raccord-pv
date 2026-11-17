@@ -15,6 +15,7 @@
   --eol: #1971c2;
   --bess: #c2255c;
   --loc: #e8590c;
+  --hta: #d9480f;
   --priv: #8a5a00;
   --priv2: #6b7785;
   --chip: #e9eef2;
@@ -294,3 +295,21 @@ a { color: var(--accent); }
 .poste.pj { border-style: dashed; border-color: var(--c, var(--line)); }
 .poste.pj.sel { border-style: dashed; border-color: var(--accent); }
 .lg-pj { width: 10px; height: 10px; border-radius: 50%; border: 1.6px dashed var(--muted); display: inline-block; }
+
+/* raccordement sur le réseau HTA existant */
+.hta-card { border: 1px solid var(--line); border-left: 4px solid var(--hta); border-radius: 8px; padding: 10px 12px; margin: 8px 0 10px; background: var(--panel); display: grid; gap: 6px; font-size: 13px; }
+.hta-card.prio { border-color: var(--ok); border-left-color: var(--ok); box-shadow: 0 0 0 1px var(--ok) inset; }
+.hta-card.st-off { opacity: .8; }
+.hta-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hta-st { font-weight: 500; }
+.hta-st.st-ok { color: var(--ok); }
+.hta-st.st-limite, .hta-st.st-verif { color: var(--part); }
+.hta-st.st-insuf { color: var(--none); }
+.hta-near { color: var(--muted); }
+.hta-near b { color: var(--ink); }
+.hta-cap { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.hta-cap select { font-size: 14px; padding: 5px; max-width: 220px; }
+.hta-card .cost { margin: 2px 0 0; }
+.chip.okc { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.lg-hta { display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--hta); vertical-align: middle; }
+@media (max-width: 760px) { .hta-cap select { font-size: 16px; } }

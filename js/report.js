@@ -326,6 +326,27 @@
     });
     if (c.dep > 1) { set(8, "normal", C.part); doc.text(T(`Puissance supérieure à ${fmt(d.pr.pDep)} MW par câble : liaison doublée (${c.dep} câbles de ${fmt(c.cab.P, 2)} MW).`), M, y - 3); y += 2; }
 
+    // raccordement sur le réseau HTA existant
+    const H = d.hta;
+    if (H) {
+      heading("Raccordement sur le réseau HTA existant", 40);
+      const hc = H.cost;
+      const body = [
+        ["Conclusion", { content: H.status.t, colSpan: 3 }],
+      ];
+      if (H.best) body.push(["Ligne HTA la plus proche", `${H.best.type}, ${kmTxt(H.best.d)} à vol d'oiseau`, "Commune", H.best.com || "—"]);
+      if (hc) body.push(
+        ["Longueur de liaison", hc.estimated ? `${kmTxt(hc.L_m)} (vol d'oiseau × ${fmt(d.pr.kDet, 2)})` : `${kmTxt(hc.L_m)} (trajet ${H.routeSrc === "OSM" ? "OSM" : "IGN"})`, "Capacité HTA (outil Enedis)", H.cap || "non renseignée"],
+        ["Quote-part S3REnR", hc.qp !== null ? `${fmt(hc.qp, 2)} k€/MW × ${fmt(d.p)} MW = ${kE(hc.qpart)}` : "—", "Liaison HTA", `${kE(hc.liaison)}${hc.cab.best ? ` (3×1×${hc.cab.best.s} mm² Alu, ΔU ${fmt(hc.cab.best.du, 1)} %)` : ""}`],
+        ["Travaux sur la ligne", kE(hc.travaux), "Raccordement indicatif", kE(hc.raccord)],
+        ["Poste de livraison", kE(hc.pdl), "Total avec poste de livraison", kE(hc.total)],
+      );
+      table({ body, columnStyles: kvStyles });
+      set(7.5, "normal", C.muted);
+      const nt = doc.splitTextToSize(T("Tracé des lignes HTA : open data Enedis (sans section ni charges). Capacité de la ligne à vérifier dans la cartographie des capacités réseau Enedis ; la simulation Enedis et l'étude du gestionnaire de réseau font foi."), W);
+      doc.text(nt, M, y - 3); y += nt.length * 3.2;
+    }
+
     // estimation du coût
     heading(`Estimation du coût de raccordement — ${P.nom}`, 60);
     const src = P.route !== null ? `trajet piéton ${P.routeSrc === "OSM" ? "OSM" : "IGN"}` : `vol d'oiseau × ${fmt(d.pr.kDet, 2)}, itinéraire indisponible`;

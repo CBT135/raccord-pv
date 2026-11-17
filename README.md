@@ -84,6 +84,12 @@ Champs Capareseau conservés (voir `site/datas/AttributeConfig.json` sur capares
 - `RTE_CDR`, `GRD1_CDR` capacité réservée disponible sans travaux vue de RTE / du GRD
 - `RTE_TVX` travaux prévus au schéma
 
+## Raccordement sur le réseau HTA existant
+
+Pour les petits projets (2 MW par défaut, réglable dans « Raccordement sur le réseau HTA existant »), l'outil lit autour du site le tracé des lignes HTA aériennes et souterraines de l'[open data Enedis](https://opendata.enedis.fr/) (mis à jour deux fois par an), repère le point de ligne le plus proche, calcule la liaison par le trajet piéton et en estime le coût : quote-part S3REnR (due au-delà de 250 kVA), liaison HTA dimensionnée comme pour les postes, travaux sur la ligne (coupure d'artère, 50 k€ par défaut) et poste de livraison, sans cellule au poste source.
+
+Le tracé Enedis ne donne ni section ni charges : la capacité d'accueil de la ligne se lit dans la [cartographie des capacités réseau Enedis](https://mon-compte-entreprise.enedis.fr/cartographie-capacites-reseau) (Espace Entreprise, bouton « Capacités Enedis » : la page s'ouvre dans un nouvel onglet et l'adresse du site est copiée pour la coller dans sa recherche), puis se reporte dans le pavé « Réseau HTA ». Si la classe de capacité couvre la puissance du projet, le réseau HTA est présenté en tête comme solution prioritaire ; sinon il passe après les postes sources. Le pavé et le rapport PDF comparent son coût à celui du poste source le moins cher.
+
 ## ETF S3REnR du poste
 
 Sous « Fiche Capareseau », chaque poste affiche un lien vers le **dernier état technique et financier** du S3REnR de sa région qui le cite, ouvert directement à la première page où il apparaît (les autres pages sont indiquées). `scripts/collect_refs.py etf` (workflow « ETF S3REnR et postes privés ») lit les pages régionales de RTE, télécharge les PDF des ETF (année la plus récente d'abord, Basse- et Haute-Normandie séparées) et y cherche le nom de chaque poste Capareseau de la région. Le lien figure aussi dans le rapport PDF.
