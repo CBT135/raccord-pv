@@ -621,7 +621,7 @@
           seen: (h.cands || []).map((x, i) => ({ i, d: x.d, type: x.type, com: x.com, tooFar: !!x.tooFar, k: capsGet()[i] })).filter((x) => x.i !== h.cur && (capInsufficient(x.k, pr.p) || x.tooFar))
             .map((x) => `n° ${x.i + 1} à ${fmt(x.d / 1000, 2)} km (${x.type}${x.com ? ", " + x.com : ""}) : ${x.tooFar && !capInsufficient(x.k, pr.p) ? "liaison trop longue" : x.k === "x" ? "écarté" : HTA_CLASSES[x.k].t + ", insuffisant"}`) };
       })(),
-      cableAt: (n) => { const r = state.results[idx]; const c = costFor(r, pr); return c.cab.calc(n).rows; },
+      cableAt: (n) => { const r = state.results[idx]; if (!r) return []; const c = costFor(r, pr); return c.cab.calc(n).rows; },
       regionNom: (code) => state.meta?.regions?.[code]?.nom || code,
       extraction: state.meta ? new Date(state.meta.extraction).toLocaleDateString("fr-FR") : null,
       url: location.href,
@@ -639,6 +639,25 @@
     } catch (e) { msg = `Rapport impossible : ${e.message || e}`; }
     state.reporting = null; refreshResults();
     if (msg) { const b = document.querySelectorAll("#list .poste .rep")[idx]; if (b) { b.textContent = msg; setTimeout(refreshResults, 5000); } }
+  }
+
+  // rapport de la solution « raccordement sur le réseau HTA » : aucun poste sélectionné, zone des projets autour du site
+  async function reportHta(btn) {
+    if (state.reporting !== null || !window.RaccordReport || !state.hta?.best) return;
+    if (state.sel !== -1) {
+      state.sel = -1;
+      document.querySelectorAll("#list .poste").forEach((el) => el.classList.remove("sel"));
+      drawPostes(); refreshProjects();
+    }
+    state.reporting = "hta"; refreshResults();
+    let msg = null;
+    try {
+      const t0 = Date.now();
+      while (state.hta.best && state.hta.best.routeSrc === null && Date.now() - t0 < 10000) await sleep(250);
+      await window.RaccordReport.generate(reportData(-1));
+    } catch (e) { msg = `Rapport impossible : ${e.message || e}`; }
+    state.reporting = null; refreshResults();
+    if (msg) toast(msg, 6000);
   }
 
   function refreshResults() {
@@ -727,7 +746,7 @@
   const HTA_CLASSES = { a: { t: "0 – 0,5 MW", lo: 0, hi: 0.5 }, b: { t: "0,5 – 2 MW", lo: 0.5, hi: 2 }, c: { t: "2 – 4 MW", lo: 2, hi: 4 }, d: { t: "> 4 MW", lo: 4, hi: Infinity } };
   state.hta = null;
   /* tronçons candidats : point le plus proche du site sur chaque tronçon, du plus près au plus loin,
-   * en écartant les points à moins de 150 m d'un candidat déjà retenu (même portion de réseau) */
+   * en écartant les points à moins de 250 m d'un candidat déjà retenu (même portion de réseau) */
   function htaCandidates(site, lines, Dmax) {
     const r = Math.PI / 180, kx = 111320 * Math.cos(site.lat * r), ky = 110540;
     const X = (lon) => (lon - site.lon) * kx, Y = (lat) => (lat - site.lat) * ky;
@@ -746,7 +765,7 @@
     per.sort((a, b) => a.d - b.d);
     const out = [];
     for (const c of per) {
-      if (out.some((o) => Math.hypot(o.x - c.x, o.y - c.y) < 150)) continue;
+      if (out.some((o) => Math.hypot(o.x - c.x, o.y - c.y) < 250)) continue;
       out.push({ ...c, route: null, routeSrc: null, routeGeom: null, addr: undefined });
     }
     return out;
@@ -926,7 +945,7 @@
     box.innerHTML = `<div class="hta-card st-${st}${st === "ok" ? " prio" : ""}">
       <div class="hta-h"><b>Réseau HTA Enedis</b>${st === "ok" ? `<span class="chip okc">solution prioritaire</span>` : st === "limite" || st === "verif" ? `<span class="chip warn">à vérifier</span>` : st ? `<span class="chip">non retenu</span>` : ""}</div>
       ${body}
-      <div class="links">${btn}${h.best ? `<a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${h.site.lat},${h.site.lon}&destination=${h.best.lat.toFixed(6)},${h.best.lon.toFixed(6)}" target="_blank" rel="noopener">Itinéraire Google Maps</a>` : ""}</div>
+      <div class="links">${h.best && st && st !== "off" ? `<button type="button" class="ghost rep-hta"${state.reporting !== null ? " disabled" : ""}>${state.reporting === "hta" ? "Rapport en cours…" : "Rapport PDF"}</button>` : ""}${btn}${h.best ? `<a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${h.site.lat},${h.site.lon}&destination=${h.best.lat.toFixed(6)},${h.best.lon.toFixed(6)}" target="_blank" rel="noopener">Itinéraire Google Maps</a>` : ""}</div>
     </div>`;
     box.querySelector(".hcap")?.addEventListener("change", (e) => {
       const i = state.hta.cur, v = e.target.value;
@@ -937,6 +956,7 @@
     box.querySelector(".hta-next")?.addEventListener("click", () => { capsSet(state.hta.cur, "x"); htaPick(); });
     box.querySelectorAll(".hta-back").forEach((b) => b.addEventListener("click", () => htaChoose(+b.dataset.i)));
     box.querySelector(".enedis").addEventListener("click", openEnedis);
+    box.querySelector(".rep-hta")?.addEventListener("click", (e) => reportHta(e.currentTarget));
     // ordre d'affichage : le réseau HTA en tête s'il est la solution à privilégier, sinon après les postes sources
     const list = $("#list");
     if (st === "ok" ? box.nextElementSibling !== list : list.nextElementSibling !== box) list.parentNode.insertBefore(box, st === "ok" ? list : list.nextSibling);

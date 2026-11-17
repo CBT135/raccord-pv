@@ -26,7 +26,7 @@
   const C = {
     ink: [23, 33, 43], muted: [91, 107, 122], line: [217, 224, 230], band: [238, 242, 245], selRow: [222, 241, 244],
     accent: [11, 114, 133], ok: [43, 138, 62], part: [217, 138, 0], none: [201, 42, 42], proj: [112, 72, 232], loc: [232, 89, 12],
-    pv: [112, 72, 232], eol: [25, 113, 194], bess: [194, 37, 92],
+    pv: [112, 72, 232], eol: [25, 113, 194], bess: [194, 37, 92], hta: [217, 72, 15],
   };
   const rgb = (a) => `rgb(${a.join(",")})`;
   const clsColor = (cls) => (cls === "ok" ? C.ok : cls === "part" ? C.part : C.none);
@@ -69,8 +69,12 @@
   }
 
   async function renderMap(d, W, H, scale) {
-    const pts = [[d.site.lat, d.site.lon], ...d.postes.map((p) => [p.lat, p.lon])];
-    for (const p of d.postes) for (const c of coordsOf(p.routeGeom)) pts.push([c[1], c[0]]);
+    const HM = d.sel < 0 && d.hta && d.hta.best; // rapport de la solution « réseau HTA »
+    // solution HTA : cadrage sur le site et la liaison (les postes sources restent au tableau de comparaison)
+    const pts = HM ? [[d.site.lat, d.site.lon]] : [[d.site.lat, d.site.lon], ...d.postes.map((p) => [p.lat, p.lon])];
+    if (!HM) for (const p of d.postes) for (const c of coordsOf(p.routeGeom)) pts.push([c[1], c[0]]);
+    if (HM) { pts.push([d.hta.best.lat, d.hta.best.lon]); for (const c of coordsOf(d.hta.routeGeom)) pts.push([c[1], c[0]]); }
+    if (HM) { const m = 0.004; pts.push([d.site.lat + m, d.site.lon + m * 1.4], [d.site.lat - m, d.site.lon - m * 1.4]); } // emprise minimale (~1 km)
     for (const p of d.projets) if (p.same) pts.push([p.lat, p.lon]); // projets raccordés au poste étudié toujours visibles
     // zoom continu : on cadre au plus juste, les tuiles du niveau entier le plus proche sont mises à l'échelle (×0,7 à ×1,4)
     const padX = 70, padY = 45, tiles = TILES[d.base] || TILES.plan;
@@ -108,12 +112,12 @@
 
     // liaisons à vol d'oiseau
     g.setLineDash([7, 6]); g.lineWidth = 1.6;
-    for (const p of d.postes) { const [x, y] = P(p.lat, p.lon); g.strokeStyle = rgb(clsColor(p.cls)); g.globalAlpha = 0.85; g.beginPath(); g.moveTo(sx, sy); g.lineTo(x, y); g.stroke(); }
+    if (!HM) for (const p of d.postes) { const [x, y] = P(p.lat, p.lon); g.strokeStyle = rgb(clsColor(p.cls)); g.globalAlpha = 0.85; g.beginPath(); g.moveTo(sx, sy); g.lineTo(x, y); g.stroke(); }
     g.setLineDash([]); g.globalAlpha = 1;
 
     // trajets : autres postes d'abord, poste étudié au-dessus
     const order = d.postes.map((p, i) => i).sort((a, b) => (a === d.sel) - (b === d.sel));
-    for (const i of order) {
+    for (const i of HM ? [] : order) {
       const p = d.postes[i], co = coordsOf(p.routeGeom); if (co.length < 2) continue;
       g.lineJoin = g.lineCap = "round";
       if (i === d.sel) {
@@ -124,6 +128,14 @@
       }
     }
 
+    // liaison vers le tronçon HTA retenu
+    if (HM) {
+      const co = coordsOf(d.hta.routeGeom), [bx, by] = P(d.hta.best.lat, d.hta.best.lon);
+      g.lineJoin = g.lineCap = "round";
+      if (co.length >= 2) { path(co); g.strokeStyle = "#fff"; g.lineWidth = 8; g.stroke(); path(co); g.strokeStyle = rgb(C.hta); g.lineWidth = 4.5; g.stroke(); }
+      else { g.setLineDash([3, 5]); g.strokeStyle = rgb(C.hta); g.lineWidth = 3; g.beginPath(); g.moveTo(sx, sy); g.lineTo(bx, by); g.stroke(); g.setLineDash([]); }
+    }
+
     // zone de recherche des projets (union des cercles autour du site et du poste étudié)
     if (d.zone && d.zone.rings) {
       g.setLineDash([8, 7]); g.lineWidth = 1.5; g.strokeStyle = rgb(C.proj); g.globalAlpha = 0.8;
@@ -132,13 +144,13 @@
     }
 
     // marqueurs (projets, postes, site), puis étiquettes placées sans se chevaucher
-    const marks = [], selP = d.postes[d.sel], [selX, selY] = P(selP.lat, selP.lon);
+    const marks = [], selP = d.postes[d.sel] || null, [selX, selY] = selP ? P(selP.lat, selP.lon) : [0, 0];
     const projs = [...d.projets].sort((a, b) => a.same - b.same); // projets du poste étudié au-dessus
     for (const pr of projs) {
       const [x, y] = P(pr.lat, pr.lon); if (x < 6 || y < 6 || x > W - 6 || y > H - 6) continue;
       pr.onMap = true;
       const t0 = pr.t[0] || "pv", col = rgb(C[t0]), r = pr.same ? 7.5 : 5;
-      if (pr.same) { g.setLineDash([2, 5]); g.lineWidth = 2; g.strokeStyle = rgb(C.accent); g.beginPath(); g.moveTo(x, y); g.lineTo(selX, selY); g.stroke(); g.setLineDash([]); }
+      if (pr.same && selP) { g.setLineDash([2, 5]); g.lineWidth = 2; g.strokeStyle = rgb(C.accent); g.beginPath(); g.moveTo(x, y); g.lineTo(selX, selY); g.stroke(); g.setLineDash([]); }
       g.save(); g.translate(x, y);
       g.fillStyle = col; g.strokeStyle = "#fff"; g.lineWidth = pr.same ? 2.5 : 1.6;
       if (t0 === "eol") { g.beginPath(); g.arc(0, 0, r, 0, 2 * Math.PI); g.fill(); g.stroke(); }
@@ -150,6 +162,7 @@
     }
     d.postes.forEach((p, i) => {
       const [x, y] = P(p.lat, p.lon), col = rgb(clsColor(p.cls)), sel = i === d.sel;
+      if (x < 0 || y < 0 || x > W || y > H) return; // hors cadre
       g.save(); g.translate(x, y); g.rotate(Math.PI / 4);
       const s = sel ? 8 : 6.5;
       g.fillStyle = col; g.strokeStyle = sel ? rgb(C.accent) : "#fff"; g.lineWidth = sel ? 3 : 2;
@@ -157,6 +170,12 @@
       placed.push([x - 12, y - 12, x + 12, y + 12]);
       marks.push({ t: `${i + 1} · ${p.nom}`, x, y, col: sel ? rgb(C.accent) : col, size: sel ? 12.5 : 11.5, bold: true, off: 14, prio: sel ? 1 : 2 });
     });
+    if (HM) {
+      const [bx, by] = P(d.hta.best.lat, d.hta.best.lon);
+      g.beginPath(); g.arc(bx, by, 7, 0, 2 * Math.PI); g.fillStyle = rgb(C.hta); g.fill(); g.lineWidth = 2.5; g.strokeStyle = "#fff"; g.stroke();
+      placed.push([bx - 10, by - 10, bx + 10, by + 10]);
+      marks.push({ t: `Raccordement HTA${d.hta.n > 1 ? ` (tronçon n° ${d.hta.cur + 1})` : ""}`, x: bx, y: by, col: rgb(C.hta), size: 12, bold: true, off: 12, prio: 0.5 });
+    }
     g.beginPath(); g.arc(sx, sy, 8, 0, 2 * Math.PI); g.fillStyle = rgb(C.accent); g.fill(); g.lineWidth = 3; g.strokeStyle = "#fff"; g.stroke();
     placed.push([sx - 11, sy - 11, sx + 11, sy + 11]);
     marks.push({ t: "Site", x: sx, y: sy, col: rgb(C.ink), size: 12, bold: true, off: 13, prio: 0 });
@@ -234,9 +253,11 @@
 
     const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const M = 15, W = 180, pageH = 297, bottom = 20;
-    const nom = d.nom || "Projet sans nom", P = d.postes[d.sel], c = P.cost;
+    const HM = d.sel < 0 && d.hta && d.hta.best;
+    const nom = d.nom || "Projet sans nom", P = HM ? null : d.postes[d.sel], c = HM ? null : P.cost;
+    const solNom = HM ? `réseau HTA Enedis${d.hta.n > 1 ? ` (tronçon n° ${d.hta.cur + 1})` : ""}` : P.nom;
     const today = new Date().toLocaleDateString("fr-FR");
-    doc.setProperties({ title: T(`Raccord PV – ${nom} – ${P.nom}`), subject: "Pré-étude de raccordement en injection", creator: "Raccord PV" });
+    doc.setProperties({ title: T(`Raccord PV – ${nom} – ${solNom}`), subject: "Pré-étude de raccordement en injection", creator: "Raccord PV" });
     const set = (size, style = "normal", color = C.ink) => { doc.setFont("helvetica", style); doc.setFontSize(size); doc.setTextColor(...color); };
     let y = 12;
 
@@ -251,7 +272,7 @@
     y += 11;
     set(18, "bold"); const tl = doc.splitTextToSize(T(nom), W).slice(0, 2); doc.text(tl, M, y); y += 7 * tl.length;
     set(9.5, "normal", C.muted);
-    doc.text(doc.splitTextToSize(T(`${ville ? ville + " · " : ""}site ${d.site.lat.toFixed(5)}, ${d.site.lon.toFixed(5)} · poste étudié : ${P.nom} (n° ${d.sel + 1})`), W), M, y);
+    doc.text(doc.splitTextToSize(T(`${ville ? ville + " · " : ""}site ${d.site.lat.toFixed(5)}, ${d.site.lon.toFixed(5)} · ${HM ? `solution étudiée : raccordement sur le ${solNom}` : `poste étudié : ${P.nom} (n° ${d.sel + 1})`}`), W), M, y);
     y += 4;
 
     // carte
@@ -264,8 +285,8 @@
     // légende
     set(7.5, "normal", C.muted);
     const items = [
-      ["site", C.accent, "Site"], ["route", C.accent, "Trajet piéton du poste étudié"],
-      ["sq", C.ok, "Capacité restante suffisante"], ["sq", C.part, "Capacité partielle"], ["sq", C.none, "Sans capacité restante"],
+      ["site", C.accent, "Site"], HM ? ["route", C.hta, "Liaison vers la ligne HTA"] : ["route", C.accent, "Trajet piéton du poste étudié"],
+      ...(HM ? [["site", C.hta, "Point de raccordement HTA"]] : [["sq", C.ok, "Capacité restante suffisante"], ["sq", C.part, "Capacité partielle"], ["sq", C.none, "Sans capacité restante"]]),
     ];
     const onMapT = (t) => d.projets.some((p) => p.onMap && p.t.includes(t));
     if (onMapT("pv")) items.push(["dia", C.pv, "Projet PV (P1…)"]);
@@ -312,7 +333,20 @@
 
     // caractéristiques du projet
     heading("Caractéristiques du projet");
-    const cb = c.cab.best;
+    if (HM) {
+      const hb = d.hta.cost.cab.best;
+      table({
+        body: [
+          ["Nom du projet", nom, "Commune", ville || "—"],
+          ["Puissance d'injection", `${fmt(d.p)} MW`, "Coordonnées (WGS84)", `${d.site.lat.toFixed(5)}, ${d.site.lon.toFixed(5)}`],
+          ["Solution étudiée", "raccordement sur une ligne HTA existante", "Câble (contrôle de chute de tension)", hb ? `3×1×${hb.s} mm² Alu, dU ${fmt(hb.du, 1)} %` : "à vérifier"],
+          ["Tension de raccordement", `${fmt(d.pr.kV, 1)} kV`, "Poste de livraison", `${fmt(d.pr.cPdl / 1e3, 0)} k€`],
+        ],
+        columnStyles: kvStyles,
+      });
+    }
+    const cb = HM ? null : c.cab.best;
+    if (!HM) {
     const prixTxt = cb ? `3×1×${cb.s} mm² Alu, ${fmt(cb.prix, 0)} €/m` : "aucune section ne convient";
     table({
       body: [
@@ -325,11 +359,12 @@
       columnStyles: kvStyles,
     });
     if (c.dep > 1) { set(8, "normal", C.part); doc.text(T(`Puissance supérieure à ${fmt(d.pr.pDep)} MW par câble : liaison doublée (${c.dep} câbles de ${fmt(c.cab.P, 2)} MW).`), M, y - 3); y += 2; }
+    }
 
     // raccordement sur le réseau HTA existant
     const H = d.hta;
     if (H) {
-      heading("Raccordement sur le réseau HTA existant", 40);
+      heading(HM ? `Solution étudiée : raccordement sur le ${solNom}` : "Raccordement sur le réseau HTA existant", 40);
       const hc = H.cost;
       const body = [
         ["Conclusion", { content: H.status.t, colSpan: 3 }],
@@ -350,6 +385,7 @@
       doc.text(nt, M, y - 3); y += nt.length * 3.2;
     }
 
+    if (!HM) {
     // estimation du coût
     heading(`Estimation du coût de raccordement — ${P.nom}`, 60);
     const src = P.route !== null ? `trajet piéton ${P.routeSrc === "OSM" ? "OSM" : "IGN"}` : `vol d'oiseau × ${fmt(d.pr.kDet, 2)}, itinéraire indisponible`;
@@ -427,8 +463,10 @@
       if (E && h.section === "body" && h.row.index === body.length - 1 && h.column.index === 1) doc.link(h.cell.x, h.cell.y, h.cell.width, h.cell.height, { url: `${E.u}#page=${E.p}` });
     } });
 
+    }
+
     // récapitulatif
-    heading("Tableau récapitulatif des postes affichés", 45);
+    heading(HM ? "Comparaison : raccordement aux postes sources affichés" : "Tableau récapitulatif des postes affichés", 45);
     table({
       head: [["#", "Poste", "GRD", "Reste à affecter", "Rempl.", "Vol d'oiseau", "Trajet", "Câble (ΔU)", "Quote-part", "Raccordement", "Avec PDL"]],
       body: d.postes.map((p, i) => [String(i + 1), p.nom + (p.moved ? " *" : ""), p.grd, `${fmt(p.cap)} MW`, p.v.INFO_TX || "—", kmTxt(p.d), p.route !== null ? kmTxt(p.route) : "—",
@@ -445,11 +483,11 @@
       },
     });
     set(7.5, "normal", C.muted);
-    const nt = doc.splitTextToSize(T(`Ligne surlignée : poste étudié.${d.postes.some((p) => p.moved) ? " * position corrigée à la main." : ""} Montants calculés avec les mêmes hypothèses pour chaque poste ; trajet « — » : longueur estimée.`), W);
+    const nt = doc.splitTextToSize(T(`${HM ? `Raccordement sur le réseau HTA : ${kE(d.hta.cost.raccord)}, ${kE(d.hta.cost.total)} avec poste de livraison.` : "Ligne surlignée : poste étudié."}${d.postes.some((p) => p.moved) ? " * position corrigée à la main." : ""} Montants calculés avec les mêmes hypothèses pour chaque poste ; trajet « — » : longueur estimée.`), W);
     doc.text(nt, M, y - 3); y += nt.length * 3.3;
 
     // projets voisins
-    const zoneTxt = `dans un rayon de ${fmt(d.pr.radius, 0)} km autour du site et du poste ${P.nom}`;
+    const zoneTxt = HM ? `dans un rayon de ${fmt(d.pr.radius, 0)} km autour du site` : `dans un rayon de ${fmt(d.pr.radius, 0)} km autour du site et du poste ${P.nom}`;
     if (!d.projets.length) {
       heading("Projets voisins (PV, éolien, stockage de 1 MW et plus)", 16);
       set(8.5, "normal", C.ink);
@@ -460,7 +498,7 @@
       set(8.5, "normal", C.ink);
       const intro = doc.splitTextToSize(T(`${d.projets.length} projet(s) ${zoneTxt}${d.projYears ? " (dossiers des 5 dernières années)" : ""}.`), W);
       doc.text(intro, M, y + 1); y += intro.length * 3.8 + 1;
-      if (same.length) {
+      if (HM) { /* pas de poste étudié */ } else if (same.length) {
         const txt = doc.splitTextToSize(T(`${same.length} projet(s) envisagent un raccordement sur ${P.nom} : ${fmt(sumSame, 1)} MW${unk ? ` (+ ${unk} de puissance non renseignée)` : ""}, pour ${fmt(P.cap)} MW de capacité réservée S3REnR restante.`), W - 6);
         const h = txt.length * 3.8 + 3;
         doc.setFillColor(...C.selRow); doc.setDrawColor(...C.accent); doc.setLineWidth(0.3); doc.rect(M, y - 0.5, W, h, "FD");
@@ -485,7 +523,7 @@
         },
       });
       set(7.5, "normal", C.muted);
-      const nt2 = doc.splitTextToSize(T(`Lignes surlignées : raccordement envisagé sur ${P.nom}. « Raccordement envisagé » : poste(s) cité(s) dans l'avis de l'autorité environnementale, le résumé non technique ou l'avis d'enquête ; plusieurs postes = options étudiées. n.c. : puissance non communiquée.${d.projets.some((p) => p.geo === "c") ? " Projets connus par un avis ou une publication préfectorale : position au centre de la commune." : ""}${d.projets.length > list.length ? ` Liste limitée aux ${list.length} premiers sur ${d.projets.length}.` : ""}`), W);
+      const nt2 = doc.splitTextToSize(T(`${HM ? "" : `Lignes surlignées : raccordement envisagé sur ${P.nom}. `}« Raccordement envisagé » : poste(s) cité(s) dans l'avis de l'autorité environnementale, le résumé non technique ou l'avis d'enquête ; plusieurs postes = options étudiées. n.c. : puissance non communiquée.${d.projets.some((p) => p.geo === "c") ? " Projets connus par un avis ou une publication préfectorale : position au centre de la commune." : ""}${d.projets.length > list.length ? ` Liste limitée aux ${list.length} premiers sur ${d.projets.length}.` : ""}`), W);
       doc.text(nt2, M, y - 3); y += nt2.length * 3.3;
     }
 
@@ -493,7 +531,7 @@
     heading("Hypothèses, sources et limites", 40);
     set(7.6, "normal", C.muted);
     const notes = [
-      `Capacités d'accueil, quote-part et travaux : Capareseau (RTE et gestionnaires de distribution), extraction du ${d.extraction || "—"}, mise à jour du poste étudié le ${P.up || "—"}. Les capacités évoluent en continu : seule une demande de raccordement (proposition technique et financière) engage le gestionnaire de réseau.`,
+      `Capacités d'accueil, quote-part et travaux : Capareseau (RTE et gestionnaires de distribution), extraction du ${d.extraction || "—"}${HM ? "" : `, mise à jour du poste étudié le ${P.up || "—"}`}. Les capacités évoluent en continu : seule une demande de raccordement (proposition technique et financière) engage le gestionnaire de réseau.`,
       `Coût : quote-part S3REnR × puissance d'injection, plus liaison HTA souterraine sur la longueur du trajet piéton (3×1×240 mm² Alu à ${fmt(d.pr.cMl, 0)} €/m ou 3×1×400 mm² Alu à ${fmt(d.pr.cMl2, 0)} €/m selon le calcul de chute de tension ; ${fmt(d.pr.pDep)} MW max par câble, au-delà câble doublé à ${fmt(d.pr.cMlB, 0)} ou ${fmt(d.pr.cMl2B, 0)} €/m), une cellule départ (${fmt(d.pr.cCell / 1e3, 0)} k€) et un poste de livraison (${fmt(d.pr.cPdl / 1e3, 0)} k€) par câble triphasé. Ordres de grandeur pour une pré-étude, hors renforcements, études et frais de gestion.`,
       `Câbles : aluminium 12/20 kV (NF C 33-226), trois unipolaires en trèfle enterrés ; valeurs typiques de catalogue (240 mm² : R 0,161 Ω/km à 90 °C, X 0,11 Ω/km, Iz 375 A ; 400 mm² : R 0,102 Ω/km, X 0,105 Ω/km, Iz 480 A${d.pr.kIz !== 1 ? `, Iz × ${fmt(d.pr.kIz, 2)} pour la pose` : ""} ; 240 mm² limité à ${fmt(d.pr.p240, 1)} MW par câble), à confirmer avec la fiche du fabricant et les conditions de pose. La tension HTA du poste n'étant pas publiée par Capareseau, ${fmt(d.pr.kV, 1)} kV est une hypothèse.`,
       "Trajet : itinéraire piéton IGN Géoplateforme (BD TOPO), à défaut OSRM (OpenStreetMap). Il approxime le tracé sous voirie et ne tient pas compte des traversées (voies ferrées, autoroutes, cours d'eau) ni des contraintes de pose.",
@@ -515,7 +553,7 @@
     }
 
     const slug = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
-    const file = `Raccord-PV_${slug(d.nom || "projet")}_${slug(P.nom)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const file = `Raccord-PV_${slug(d.nom || "projet")}_${slug(HM ? "reseau-HTA" : P.nom)}_${new Date().toISOString().slice(0, 10)}.pdf`;
     if (d.output === "blob") return { blob: doc.output("blob"), file, pages: nP };
     doc.save(file);
     return { file, pages: nP };
