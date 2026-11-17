@@ -430,7 +430,7 @@
     const pr = params();
     const { list, firstFull } = nearest(state.site, pr.p);
     state.results = list.map((x, i) => ({ ...x, i, route: null, routeSrc: null, routeGeom: null }));
-    state.sel = 0;
+    state.sel = 0; state.selUser = false; state.htaPrio = false;
     $("#site").textContent = `Site : ${state.site.lat.toFixed(5)}, ${state.site.lon.toFixed(5)}`;
     $("#hint").hidden = true;
     renderList(firstFull);
@@ -651,7 +651,9 @@
     const pr = params();
     state.results.forEach((r, idx) => {
       const cls = capClass(capOf(r.p), pr.p), col = capColor(cls);
-      const line = L.polyline([[state.site.lat, state.site.lon], [r.p.lat, r.p.lon]], { color: col, weight: idx === state.sel ? 2.5 : 1.5, dashArray: "6 6", opacity: 0.9, interactive: false }).addTo(lyrLinks);
+      // réseau HTA retenu en priorité (aucun poste sélectionné) : pas de tracé vers les postes sources
+      const hideLinks = state.sel < 0;
+      const line = L.polyline([[state.site.lat, state.site.lon], [r.p.lat, r.p.lon]], { color: col, weight: idx === state.sel ? 2.5 : 1.5, dashArray: "6 6", opacity: hideLinks ? 0 : 0.9, interactive: false }).addTo(lyrLinks);
       const html = `<div class="pin-poste${r.p.moved ? " moved" : ""}${r.p.pj === "1" ? " pj" : ""}" style="--c:${col}"><div class="pt"></div><div class="lab">${idx + 1} · ${fmt(capOf(r.p))} MW</div></div>`;
       L.marker([r.p.lat, r.p.lon], { icon: L.divIcon({ className: "", html, iconSize: [0, 0] }), zIndexOffset: 500 - idx, draggable: true, autoPan: true })
         .bindTooltip(r.p.moved ? "Position corrigée — glisser pour ajuster" : "Glisser pour corriger la position", { direction: "bottom", offset: [0, 12] })
@@ -660,13 +662,13 @@
         .on("dragend", (e) => { state.lastDrag = Date.now(); setPosteLatLng(r.p, e.target.getLatLng()); })
         .on("click", () => { if (Date.now() - state.lastDrag > 400) select(idx); })
         .bindPopup(postePopupHtml(r.p)).addTo(lyrPostes);
-      if (r.routeGeom) {
+      if (r.routeGeom && !hideLinks) {
         L.geoJSON(r.routeGeom, { style: { color: idx === state.sel ? css("--accent") : col, weight: idx === state.sel ? 5 : 2.5, opacity: idx === state.sel ? 0.9 : 0.45 } }).addTo(lyrRoute);
       }
     });
   }
   function select(idx) {
-    state.sel = idx;
+    state.sel = idx; state.selUser = true;
     document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === idx));
     drawPostes();
     refreshProjects();
@@ -859,6 +861,7 @@
         </div>${cmp}` : ""}`;
     }
     const st = h.loading || h.err ? "" : htaStatus(pr, htaCost(pr) || { L_m: Infinity }).k;
+    htaPriority(st === "ok");
     box.innerHTML = `<div class="hta-card st-${st}${st === "ok" ? " prio" : ""}">
       <div class="hta-h"><b>Réseau HTA Enedis</b>${st === "ok" ? `<span class="chip okc">solution prioritaire</span>` : st === "limite" || st === "verif" ? `<span class="chip warn">à vérifier</span>` : st ? `<span class="chip">non retenu</span>` : ""}</div>
       ${body}
@@ -869,6 +872,22 @@
     // ordre d'affichage : le réseau HTA en tête s'il est la solution à privilégier, sinon après les postes sources
     const list = $("#list");
     if (st === "ok" ? box.nextElementSibling !== list : list.nextElementSibling !== box) list.parentNode.insertBefore(box, st === "ok" ? list : list.nextSibling);
+  }
+  // le réseau HTA passe en tête : on retire le tracé vers le poste source sélectionné ; un clic sur un poste le réaffiche
+  function htaPriority(prio) {
+    if (prio === !!state.htaPrio) return;
+    state.htaPrio = prio;
+    if (prio) state.sel = -1;
+    else if (state.sel < 0) state.sel = 0;
+    else return;
+    document.querySelectorAll("#list .poste").forEach((el, i) => el.classList.toggle("sel", i === state.sel));
+    drawPostes(); refreshProjects();
+    const h = state.hta;
+    if (prio && h?.best) {
+      const pts = [[h.site.lat, h.site.lon], [h.best.lat, h.best.lon]];
+      if (h.routeGeom) L.geoJSON(h.routeGeom).getLayers().forEach((l) => l.getLatLngs && pts.push(...l.getLatLngs().flat(2)));
+      map.fitBounds(L.latLngBounds(pts).pad(0.6));
+    }
   }
   function openEnedis() {
     const h = state.hta, s = state.site;
