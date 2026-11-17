@@ -748,7 +748,6 @@
     for (const c of per) {
       if (out.some((o) => Math.hypot(o.x - c.x, o.y - c.y) < 150)) continue;
       out.push({ ...c, route: null, routeSrc: null, routeGeom: null, addr: undefined });
-      if (out.length >= 12) break;
     }
     return out;
   }
