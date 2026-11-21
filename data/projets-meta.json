@@ -1,17 +1,17 @@
 {
- "collecte": "2026-11-20",
- "depuis": "2020-11-20",
+ "collecte": "2026-11-21",
+ "depuis": "2020-11-21",
  "sources": {
   "pe": 2670,
   "novae": 1075,
   "mrae": 1653,
-  "pref": 291
+  "pref": 274
  },
  "sources_date": {
   "pe": "2026-11-16",
   "novae": "2026-11-16",
   "mrae": "2026-11-16",
-  "pref": "2026-11-20"
+  "pref": "2026-11-21"
  },
  "prefectures": {
   "01": {
@@ -20,9 +20,9 @@
    "le": "2026-11-09"
   },
   "02": {
-   "resultats": 35,
-   "projets": 10,
-   "le": "2026-11-08"
+   "resultats": 18,
+   "projets": 7,
+   "le": "2026-11-21"
   },
   "03": {
    "resultats": 20,
@@ -85,10 +85,9 @@
    "le": "2026-11-15"
   },
   "15": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-20"
+   "resultats": 23,
+   "projets": 9,
+   "le": "2026-11-21"
   },
   "16": {
    "resultats": 15,
@@ -159,13 +158,13 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-20"
+   "le": "2026-11-21"
   },
   "31": {
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-20"
+   "le": "2026-11-21"
   },
   "32": {
    "resultats": 17,
@@ -323,16 +322,15 @@
    "le": "2026-11-20"
   },
   "63": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-20"
+   "resultats": 1,
+   "projets": 1,
+   "le": "2026-11-21"
   },
   "64": {
    "resultats": 0,
    "projets": 0,
    "erreur": "Remote end closed connection without response",
-   "le": "2026-11-20"
+   "le": "2026-11-21"
   },
   "65": {
    "resultats": 8,
@@ -345,9 +343,9 @@
    "le": "2026-11-19"
   },
   "67": {
-   "resultats": 42,
-   "projets": 2,
-   "le": "2026-11-06"
+   "resultats": 9,
+   "projets": 1,
+   "le": "2026-11-21"
   },
   "68": {
    "resultats": 10,
@@ -360,9 +358,10 @@
    "le": "2026-11-18"
   },
   "70": {
-   "resultats": 115,
-   "projets": 17,
-   "le": "2026-11-06"
+   "resultats": 0,
+   "projets": 0,
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-21"
   },
   "71": {
    "resultats": 42,
@@ -393,13 +392,13 @@
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-20"
+   "le": "2026-11-21"
   },
   "78": {
    "resultats": 0,
    "projets": 0,
    "erreur": "HTTP Error 404: Not Found",
-   "le": "2026-11-20"
+   "le": "2026-11-21"
   },
   "79": {
    "resultats": 10,
@@ -407,10 +406,9 @@
    "le": "2026-11-20"
   },
   "80": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-20"
+   "resultats": 11,
+   "projets": 1,
+   "le": "2026-11-21"
   },
   "81": {
    "resultats": 16,
@@ -418,15 +416,14 @@
    "le": "2026-11-20"
   },
   "82": {
-   "resultats": 0,
-   "projets": 0,
-   "erreur": "Remote end closed connection without response",
-   "le": "2026-11-20"
+   "resultats": 28,
+   "projets": 1,
+   "le": "2026-11-21"
   },
   "83": {
-   "resultats": 47,
-   "projets": 20,
-   "le": "2026-11-07"
+   "resultats": 15,
+   "projets": 1,
+   "le": "2026-11-21"
   },
   "84": {
    "resultats": 10,
@@ -434,19 +431,20 @@
    "le": "2026-11-20"
   },
   "85": {
-   "resultats": 116,
+   "resultats": 0,
    "projets": 0,
-   "le": "2026-11-07"
+   "erreur": "Remote end closed connection without response",
+   "le": "2026-11-21"
   },
   "86": {
-   "resultats": 10,
-   "projets": 0,
-   "le": "2026-11-08"
+   "resultats": 30,
+   "projets": 5,
+   "le": "2026-11-21"
   },
   "87": {
    "resultats": 7,
-   "projets": 2,
-   "le": "2026-11-08"
+   "projets": 4,
+   "le": "2026-11-21"
   },
   "88": {
    "resultats": 58,
@@ -489,15 +487,15 @@
    "le": "2026-11-09"
   }
  },
- "documents_lus": 10,
+ "documents_lus": 14,
  "documents_en_attente": 0,
  "projets": {
-  "total": 3938,
+  "total": 3930,
   "avec_poste": 2005,
-  "puissance_inconnue": 1191,
-  "pv": 2405,
+  "puissance_inconnue": 1183,
+  "pv": 2403,
   "bess": 91,
-  "eol": 1493
+  "eol": 1487
  },
- "duree_s": 1852
+ "duree_s": 1996
 }
